@@ -40,7 +40,7 @@ class GCNStream:
     def gcn_config(self) -> dict[str, Any]:
         return self._gcn_config
 
-    def run(self) -> None:
+    def run(self, test: bool = False) -> None:
         """
         Run the polling infinite loop of the GCN stream with periodic configuration checks
         """
@@ -49,6 +49,8 @@ class GCNStream:
 
         while True:
             gcn_consumer.start_poll_loop()
+            if test:
+                break
 
 
 def load_gcn_config(config_path: Path, logger: LoggerNewLine) -> dict[str, Any]:

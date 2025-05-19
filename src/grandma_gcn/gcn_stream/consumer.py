@@ -6,15 +6,18 @@ logger = logging.getLogger(__name__)
 
 class Consumer(KafkaConsumer):
     def __init__(self, *, gcn_stream) -> None:
+        print(gcn_stream.gcn_config)
         super().__init__(
-            config=gcn_stream.kafka_config,
-            client_id=gcn_stream.gcn_config["CLIENT"]["client_id"],
-            client_secret=gcn_stream.gcn_config["CLIENT"]["client_secret"],
+            config=gcn_stream.gcn_config["KAFKA_CONFIG"],
+            client_id=gcn_stream.gcn_config["CLIENT"]["id"],
+            client_secret=gcn_stream.gcn_config["CLIENT"]["secret"],
         )
 
         self.gcn_stream = gcn_stream
 
-        topics = list(gcn_stream.topics.keys())
+        topics = gcn_stream.gcn_config["GCN_TOPICS"]["topics"]
+
+        print(f"Topics: {topics}")
 
         # Subscribe to topics and receive alerts
         if gcn_stream.restart_queue:

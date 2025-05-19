@@ -3,9 +3,9 @@ id = "toto"
 secret = "tata"
 
 [KAFKA_CONFIG]
-group_id = "titi_id"
-auto_offset_reset = "earliest"
-enable_auto_commit = false
+"group.id" = "titi_id"
+"auto.offset.reset" = "earliest"
+"enable.auto.commit" = false
 
 [GCN_TOPICS]
 topics = ["igwn.gwalert"]
