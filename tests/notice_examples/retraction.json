@@ -1,0 +1,10 @@
+{
+    "alert_type": "RETRACTION",
+    "time_created": "2024-11-26T23:06:05Z",
+    "superevent_id": "S241126dm",
+    "urls": {
+        "gracedb": "https://gracedb.ligo.org/superevents/S241126dm/view/"
+    },
+    "event": null,
+    "external_coinc": null
+}
