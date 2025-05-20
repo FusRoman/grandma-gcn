@@ -1,0 +1,27 @@
+services:
+  gcn_stream:
+    image: too_mm_app
+    build:
+      context: ./
+      dockerfile: dockerfile
+      target: base
+      args:
+        - USR=${USR}
+        - USR_GROUP=${USR_GROUP}
+        - PROJECT_UID=${PROJECT_UID}
+        - PROJECT_GID=${PROJECT_GID}
+    user: "${PROJECT_UID}:${PROJECT_GID}"
+    depends_on:
+      - celery_worker
+    command: ["python" , "src/gcn_stream/stream.py", "--gcn-config-path", "gcn_stream_config.toml"]
+
+  redis:
+    image: redis:6.0.5
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+
+  celery_worker:
+    image: too_mm_app
+    depends_on:
+      - redis
+    command: ["python", "-m", "celery", "-A", "grandma_gcn.worker.celery_app", "worker", "--loglevel", "DEBUG"]
