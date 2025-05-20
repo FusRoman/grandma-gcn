@@ -2,7 +2,7 @@ from base64 import b64decode
 from enum import Enum
 import io
 import json
-from typing import Any
+from typing import Any, Self
 
 from astropy.time import Time
 
@@ -30,8 +30,18 @@ def bytes_to_dict(notice: bytes) -> dict:
 
 
 class GW_alert:
-    def __init__(self, notice: bytes) -> None:
+    def __init__(
+        self,
+        notice: bytes,
+        BBH_threshold: float,
+        Distance_threshold: float,
+        ErrorRegion_threshold: float,
+    ) -> None:
         self.gw_dict = bytes_to_dict(notice)
+
+        self.BBH_threshold = BBH_threshold
+        self.Distance_threshold = Distance_threshold
+        self.ErrorRegion_threshold = ErrorRegion_threshold
 
     @property
     def event(self) -> dict[str, Any]:
@@ -41,7 +51,8 @@ class GW_alert:
         else:
             return event
 
-    def get_id(self) -> str:
+    @property
+    def event_id(self) -> str:
         """
         Get the identifier of the gw alert
 
@@ -51,6 +62,55 @@ class GW_alert:
             the gw identifier
         """
         return self.gw_dict["superevent_id"]
+
+    class EventType(Enum):
+        RETRACTION = "RETRACTION"
+        PRELIMINARY = "PRELIMINARY"
+        INITIAL = "INITIAL"
+        UPDATE = "UPDATE"
+
+        def to_emoji(self) -> str:
+            """
+            Convert the event type to an emoji
+
+            Returns
+            -------
+            str
+                the emoji corresponding to the event type
+            """
+            match self:
+                case self.RETRACTION:
+                    return "❌"
+                case self.PRELIMINARY:
+                    return "🟡"
+                case self.INITIAL:
+                    return "🟢"
+                case self.UPDATE:
+                    return "🔄"
+                case _:
+                    return "❓"
+
+    @property
+    def event_type(self) -> EventType | None:
+        """
+        Get the event type of the gw alert
+
+        Returns
+        -------
+        str
+            the event type
+        """
+        match self.gw_dict["alert_type"]:
+            case "RETRACTATION":
+                return self.EventType.RETRACTION
+            case "PRELIMINARY":
+                return self.EventType.PRELIMINARY
+            case "INITIAL":
+                return self.EventType.INITIAL
+            case "UPDATE":
+                return self.EventType.UPDATE
+            case _:
+                return None
 
     @property
     def event_time(self) -> Time | None:
@@ -62,11 +122,7 @@ class GW_alert:
 
     @property
     def far(self) -> float | None:
-        event_far = self.event.get("far", None)
-        if event_far is None:
-            return None
-        else:
-            return event_far
+        return self.event.get("far", None)
 
     @property
     def has_NS(self) -> float | None:
@@ -77,6 +133,14 @@ class GW_alert:
             return event_prop.get("HasNS", None)
 
     @property
+    def has_remnant(self) -> float | None:
+        event_prop: dict[str, float] | None = self.event.get("properties", None)
+        if event_prop is None:
+            return None
+        else:
+            return event_prop.get("HasRemnant", None)
+
+    @property
     def is_significant(self) -> bool:
         return self.event.get("significant", False)
 
@@ -84,6 +148,28 @@ class GW_alert:
         BBH = "BBH"
         NSBH = "NSBH"
         BNS = "BNS"
+        Terrestrial = "Terrestrial"
+
+        def to_emoji(self) -> str:
+            """
+            Convert the CBC class to an emoji
+
+            Returns
+            -------
+            str
+                the emoji corresponding to the CBC class
+            """
+            match self:
+                case self.BBH:
+                    return "⚫⚫"
+                case self.NSBH:
+                    return "🌟⚫"
+                case self.BNS:
+                    return "🌟🌟"
+                case self.Terrestrial:
+                    return "🌍"
+                case _:
+                    return "❓"
 
     def class_proba(self, cbc_class: CBC_proba) -> float | None:
         event_prop: dict[str, float] | None = self.event.get("classification", None)
@@ -93,12 +179,77 @@ class GW_alert:
             return event_prop.get(cbc_class.value, None)
 
     @property
-    def event_class(self) -> str | None:
+    def event_class(self) -> CBC_proba | None:
         event_prop: dict[str, float] | None = self.event.get("classification", None)
         if event_prop is None:
             return None
         else:
-            return max(event_prop, key=event_prop.get)
+            match max(event_prop, key=event_prop.get):
+                case "Terrestrial":
+                    return self.CBC_proba.Terrestrial
+                case "BBH":
+                    return self.CBC_proba.BBH
+                case "NSBH":
+                    return self.CBC_proba.NSBH
+                case "BNS":
+                    return self.CBC_proba.BNS
+                case _:
+                    return None
+
+    @property
+    def group(self) -> str | None:
+        return self.event.get("group", None)
+
+    class Instrument(Enum):
+        H1 = "H1 (HANFORD)"
+        L1 = "L1 (LIVINGSTON)"
+        V1 = "V1 (VIRGO)"
+        KAGRA = "K1 (KAGRA)"
+
+        @classmethod
+        def from_string(cls, instrument: str) -> Self:
+            """
+            Convert a string to an Instrument enum value
+
+            Parameters
+            ----------
+            instrument : str
+                the instrument string
+
+            Returns
+            -------
+            Instrument
+                the corresponding Instrument enum value
+            """
+            return cls[instrument] if instrument in cls.__members__ else None
+
+    @property
+    def instruments(self) -> Instrument | None:
+        """
+        Get the instrument used to detect the event
+
+        Returns
+        -------
+        Instrument
+            the instrument used to detect the event
+        """
+        instrument = self.event.get("instruments", None)
+        if instrument is None:
+            return None
+        else:
+            return [self.Instrument.from_string(i) for i in instrument]
+
+    @property
+    def gracedb_url(self) -> str | None:
+        """
+        Get the GraceDB url of the event
+
+        Returns
+        -------
+        str
+            the GraceDB url of the event
+        """
+        return self.gw_dict["urls"]["gracedb"]
 
     def get_event_time(self) -> Time | None:
         """
@@ -121,7 +272,7 @@ class GW_alert:
         bool
             if True, the notice is a real detection.
         """
-        return self.get_id()[0] == "S" and self.is_significant
+        return self.event_id[0] == "S" and self.is_significant
 
     def get_skymap(self) -> QTable:
         """
@@ -194,3 +345,91 @@ class GW_alert:
             mean_distance,
             mean_sigma_dist,
         )
+    
+    class GRANDMA_Action(Enum):
+        GO_GRANDMA = "🚀 *GO GRANDMA*"
+        NO_GRANDMA = "❌ *NO GRANDMA*"
+
+    def gw_score(self) -> tuple[int, str, GRANDMA_Action]:
+        """
+        Compute the score of the event based on the event type, class and distance.
+        The score is defined as follows:
+        - 0: not an astrophysical event
+        - 1: terrestrial event
+        - 2: interesting event
+        - 3: very interesting event
+
+        Parameters
+        ----------
+        BBH_threshold : float
+            the threshold for BBH event (between 0 and 1)
+        Distance_threshold : float
+            the threshold for distance (in Mpc)
+        ErrorRegion_threshold : float
+            the threshold for error region (in square degree)
+
+        Returns
+        -------
+        tuple[int, str, GRANDMA_Action]
+            - score: the score of the event
+            - msg: a message describing the event
+            - conclusion: the action to take based on the score
+        """
+        # Initialize score to the lowest value
+        score = 0
+        msg = ""
+        conclusion = self.GRANDMA_Action.NO_GRANDMA
+
+        _, size_region, mean_dist, _ = self.get_error_region(0.9)
+
+        match self.event_type:
+            case self.EventType.RETRACTION:
+                msg = "RETRACTION, it is not an Astrophysical event, \n"
+            case (
+                self.EventType.PRELIMINARY
+                | self.EventType.INITIAL
+                | self.EventType.UPDATE
+            ):
+                match self.event_class:
+                    case self.CBC_proba.Terrestrial:
+                        msg = (
+                            "FA, it might be not an Astrophysical event, \n"
+                            "please wait for any retractation message in the next 30 min"
+                        )
+                    case self.CBC_proba.BBH:
+                        if self.class_proba(self.CBC_proba.BBH) > self.BBH_threshold:
+                            if (
+                                mean_dist < self.Distance_threshold
+                                and size_region < self.ErrorRegion_threshold
+                            ):
+                                msg = "FA, it is a very interesting event, well localized but maybe no counterpart"
+                                score = 2
+                                conclusion = self.GRANDMA_Action.GO_GRANDMA
+                            else:
+                                msg = "FA, far and badly localized BBH event"
+                                score = 1
+                                conclusion = self.GRANDMA_Action.NO_GRANDMA
+                    case self.CBC_proba.NSBH | self.CBC_proba.BNS:
+                        if (
+                            mean_dist < self.Distance_threshold
+                            and size_region < self.ErrorRegion_threshold
+                        ):
+                            msg = "FA, it is a very EXTREMELY interesting event, well localized"
+                            score = 3
+                            conclusion = self.GRANDMA_Action.GO_GRANDMA
+                        else:
+                            msg = (
+                                "FA, it is a very interesting event, but however well localized and far, "
+                                "let's see if we can reach the 50% cred. region."
+                            )
+                            score = 2
+                            conclusion = self.GRANDMA_Action.GO_GRANDMA
+                    case _:
+                        msg = (
+                            "FA, it might be not an Astrophysical event, \n"
+                            "please wait for any retractation message in the next 30 min"
+                        )
+                        score = 0
+                        conclusion = self.GRANDMA_Action.NO_GRANDMA
+
+        return score, msg, conclusion
