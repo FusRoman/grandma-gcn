@@ -4,6 +4,7 @@ import pytest
 
 from grandma_gcn.gcn_stream.consumer import Consumer
 from grandma_gcn.gcn_stream.gcn_logging import init_logging
+from tests.test_gw_alert import open_notice_file
 
 
 @pytest.fixture
@@ -59,9 +60,11 @@ def mock_gcn_stream():
             "CLIENT": {"id": "test_id", "secret": "test_secret"},
             "KAFKA_CONFIG": {},
             "GCN_TOPICS": {"topics": ["test_topic"]},
+            "Slack": {"gw_alert_channel": "test_channel"},
         }
         topics = {"test_topic": None}
         restart_queue = False
+        logger = init_logging()
 
     return MockGCNStream()
 
@@ -97,6 +100,11 @@ def test_start_poll_loop(mocker, mock_gcn_stream):
         "grandma_gcn.gcn_stream.consumer.KafkaConsumer.commit", side_effect=mock_commit
     )
 
+    # Mock the process_alert method
+    mock_process_alert = mocker.patch(
+        "grandma_gcn.gcn_stream.consumer.Consumer.process_alert"
+    )
+
     # Create an instance of the Consumer class
     consumer = Consumer(gcn_stream=mock_gcn_stream)
 
@@ -106,6 +114,7 @@ def test_start_poll_loop(mocker, mock_gcn_stream):
     # Assertions
     assert mock_poll_method.call_count == 3  # Still unclear why it is called 3 times
     mock_commit_method.assert_called_once_with(mock_message)
+    mock_process_alert.assert_called_once_with(notice=mock_message.value.return_value)
     assert len(message_queue) == 0
 
 
@@ -145,12 +154,70 @@ def test_gcn_stream_run(mocker, gcn_config_path, logger):
         "grandma_gcn.gcn_stream.consumer.KafkaConsumer.commit", side_effect=mock_commit
     )
 
+    # Mock the process_alert method
+    mock_process_alert = mocker.patch(
+        "grandma_gcn.gcn_stream.consumer.Consumer.process_alert"
+    )
+
     gcn_stream = GCNStream(gcn_config_path, logger=logger, restart_queue=False)
 
     # Run the GCN stream
     gcn_stream.run(test=True)
 
     # Assertions
-    assert mock_poll_method.call_count == 121  # Still unclear why it is called 3 times
+    assert mock_poll_method.call_count == 121
     mock_commit_method.assert_called_once_with(mock_message)
+    mock_process_alert.assert_called_once_with(notice=mock_message.value.return_value)
+    assert len(message_queue) == 0
+
+
+def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
+    """
+    Test the run method of the GCN stream with a real notice
+    """
+    from grandma_gcn.gcn_stream.stream import GCNStream
+
+    # Simulate a message queue
+    message_queue = []
+
+    # Create a mocked message
+    mock_message = mocker.Mock()
+    mock_message.topic.return_value = "igwn.gwalert"
+    mock_message.offset.return_value = 42
+    mock_message.error.return_value = None
+    mock_message.value.return_value = open_notice_file(Path("tests"), "S241102br-update.json")
+
+    # Add the mocked message to the queue
+    message_queue.append(mock_message)
+
+    # Mock the poll method
+    def mock_poll(*args, **kwargs):
+        return message_queue[0] if message_queue else None
+
+    mock_poll_method = mocker.patch(
+        "grandma_gcn.gcn_stream.consumer.KafkaConsumer.poll", side_effect=mock_poll
+    )
+
+    # Mock the commit method
+    def mock_commit(message):
+        if message in message_queue:
+            message_queue.remove(message)
+
+    mock_commit_method = mocker.patch(
+        "grandma_gcn.gcn_stream.consumer.KafkaConsumer.commit", side_effect=mock_commit
+    )
+
+    mock_post_msg_on_slack = mocker.patch(
+        "grandma_gcn.slackbot.gw_message.post_msg_on_slack"
+    )
+
+    gcn_stream = GCNStream(gcn_config_path, logger=logger, restart_queue=False)
+
+    # Run the GCN stream
+    gcn_stream.run(test=True)
+
+    # Assertions
+    assert mock_poll_method.call_count == 121
+    mock_commit_method.assert_called_once_with(mock_message)
+    mock_post_msg_on_slack.assert_called()  # Ensure post_msg_on_slack is called
     assert len(message_queue) == 0

@@ -9,6 +9,11 @@ dependencies = [
     "gcn-kafka>=0.3.3",
     "tomli>=2.0.2",
     "pytz>=2025.2",
+    "slack-sdk>=3.35.0",
+    "fink-utils>=0.41.0",
+    "typing-extensions>=4.13.2",
+    "astropy>=7.0.2",
+    "astropy-healpix>=1.1.2",
 ]
 requires-python = ">=3.12"
 readme = "README.md"
@@ -27,3 +32,5 @@ test = [
     "pytest>=8.3.3",
     "pytest-mock>=3.14.0",
 ]
+
+lint = ["black>=24.10.0", "pre-commit>=4.0.1", "pylint>=3.3.2"]
