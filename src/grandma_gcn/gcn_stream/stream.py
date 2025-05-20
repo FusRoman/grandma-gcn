@@ -4,6 +4,7 @@ from typing import Any, Optional
 from grandma_gcn.gcn_stream.consumer import Consumer
 import tomli
 from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine, init_logging
+from fink_utils.slack_bot.bot import init_slackbot
 
 
 class GCNStream:
@@ -35,6 +36,8 @@ class GCNStream:
         self.logger.setFileHandler(logfile)
 
         self.restart_queue = restart_queue
+
+        self.slack_client = init_slackbot(self.logger)
 
     @property
     def gcn_config(self) -> dict[str, Any]:
@@ -83,7 +86,7 @@ def main(gcn_config_path: str = "instance/gcn_config.toml") -> None:
     """
     Launch the GCN stream, an infinite loop waiting for notices from the GCN network.
     """
-    logger = init_logging()
+    logger = init_logging(logger_name="gcn_stream")
     gcn_stream = GCNStream(Path(gcn_config_path), logger, restart_queue=True)
     gcn_stream.run()
 

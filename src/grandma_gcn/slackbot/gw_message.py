@@ -1,10 +1,8 @@
 from pathlib import Path
 from fink_utils.slack_bot.msg_builder import Message
-from fink_utils.slack_bot.bot import init_slackbot, post_msg_on_slack
 
-from grandma_gcn.gcn_stream.gcn_logging import init_logging
+from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine, init_logging
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
-from tests.test_gw_alert import open_notice_file
 
 from grandma_gcn.slackbot.element_extension import (
     BaseSection,
@@ -20,6 +18,9 @@ from fink_utils.slack_bot.rich_text.rich_section import SectionElement
 from fink_utils.slack_bot.rich_text.rich_list import RichList
 
 from astropy.time import Time
+
+from fink_utils.slack_bot.bot import post_msg_on_slack
+from slack_sdk import WebClient
 
 
 def instruments_to_markdown(instruments: list[GW_alert.Instrument]) -> str:
@@ -43,6 +44,19 @@ def instruments_to_markdown(instruments: list[GW_alert.Instrument]) -> str:
 
 
 def build_gwalert_msg(gw_alert: GW_alert) -> Message:
+    """
+    Build a message for the GW alert.
+    Parameters
+    ----------
+    gw_alert : GW_alert
+        The GW alert object.
+    Returns
+    -------
+    Message
+        The message object containing the alert information.
+    """
+
+    gw_alert.logger.info("Building message for GW alert")
 
     score, msg_fa, action = gw_alert.gw_score()
 
@@ -174,20 +188,34 @@ def build_gwalert_msg(gw_alert: GW_alert) -> Message:
     return msg
 
 
-if __name__ == "__main__":
+def send_alert_to_slack(
+    gw_alert: GW_alert,
+    slack_client: WebClient,
+    channel: str,
+    logger: LoggerNewLine,
+) -> None:
+    """
+    Send the alert to slack
+    Parameters
+    ----------
+    gw_alert : GW_alert
+        the alert to send
+    slack_client : WebClient
+        the slack client to use to send the message
+    channel : str
+        the channel to send the message to
+    logger : LoggerNewLine
+        the logger to use
+    """
 
-    logger = init_logging("test_slack_bot")
-    slack_client = init_slackbot(logger)
-
-    bytes_notice = open_notice_file(Path("tests"), "S241102br-initial.json")
-    gw = GW_alert(bytes_notice, 0.5, 500, 100)
-
-    msg = build_gwalert_msg(gw)
+    msg = build_gwalert_msg(gw_alert)
 
     post_msg_on_slack(
         slack_client,
-        "#test_gwalerts",
+        channel,
         [msg],
         logger=logger,
         verbose=True,
     )
+
+    logger.info("Alert sent to Slack channel: {}".format(channel))

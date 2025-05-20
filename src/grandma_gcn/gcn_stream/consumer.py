@@ -1,12 +1,16 @@
 from gcn_kafka import Consumer as KafkaConsumer
 import logging
 
+from grandma_gcn.gcn_stream.gw_alert import GW_alert
+from grandma_gcn.slackbot.gw_message import send_alert_to_slack
+
 logger = logging.getLogger(__name__)
 
 
 class Consumer(KafkaConsumer):
     def __init__(self, *, gcn_stream) -> None:
-        print(gcn_stream.gcn_config)
+        gcn_stream.logger.info("Starting GCN stream consumer")
+
         super().__init__(
             config=gcn_stream.gcn_config["KAFKA_CONFIG"],
             client_id=gcn_stream.gcn_config["CLIENT"]["id"],
@@ -17,7 +21,7 @@ class Consumer(KafkaConsumer):
 
         topics = gcn_stream.gcn_config["GCN_TOPICS"]["topics"]
 
-        print(f"Topics: {topics}")
+        self.gw_alert_channel = gcn_stream.gcn_config["Slack"]["gw_alert_channel"]
 
         # Subscribe to topics and receive alerts
         if gcn_stream.restart_queue:
@@ -27,6 +31,8 @@ class Consumer(KafkaConsumer):
             )
         else:
             self.subscribe(topics)
+
+        self.logger = logging.getLogger("gcn_stream.consumer")
 
     @staticmethod
     def assign_partition(consumer: "Consumer", partitions) -> None:
@@ -45,6 +51,39 @@ class Consumer(KafkaConsumer):
         for p in partitions:
             p.offset = 0
         consumer.assign(partitions)
+
+    def process_alert(self, notice: bytes) -> str:
+        """
+        Process the alert and return a message.
+
+        Parameters
+        -----------
+            notice (bytes): The alert notice in bytes.
+
+        Returns
+        -------
+            str: The processed message.
+        """
+        self.logger.info("Processing alert")
+
+        gw_alert = GW_alert(
+            notice,
+            BBH_threshold=self.gcn_stream.gcn_config["Threshold"]["BBH_proba"],
+            Distance_threshold=self.gcn_stream.gcn_config["Threshold"]["Distance_cut"],
+            ErrorRegion_threshold=self.gcn_stream.gcn_config["Threshold"][
+                "Size_region_cut"
+            ],
+        )
+        score, _, _ = gw_alert.gw_score()
+        print(score)
+        if score > 1:
+            self.logger.info("Significant alert detected")
+            send_alert_to_slack(
+                gw_alert,
+                self.gcn_stream.slack_client,
+                channel=self.gw_alert_channel,
+                logger=self.logger,
+            )
 
     def start_poll_loop(
         self, interval_between_polls: int = 1, max_retries: int = 120
@@ -68,7 +107,7 @@ class Consumer(KafkaConsumer):
                     logger.error(message.error())
                     continue
                 try:
-                    logger.info(f"message: {message.value()}")
+                    self.process_alert(notice=message.value())
                     self.commit(message)
                 except Exception as err:
                     logger.error(err)

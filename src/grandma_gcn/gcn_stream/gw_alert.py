@@ -2,6 +2,7 @@ from base64 import b64decode
 from enum import Enum
 import io
 import json
+import logging
 from typing import Any, Self
 
 from astropy.time import Time
@@ -9,6 +10,10 @@ from astropy.time import Time
 from astropy.table import QTable
 import astropy.units as astro_units
 from numpy import array, cumsum, float64, inf, isinf, logical_not, mean, ndarray
+
+from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
+
+from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
 
 
 def bytes_to_dict(notice: bytes) -> dict:
@@ -42,6 +47,8 @@ class GW_alert:
         self.BBH_threshold = BBH_threshold
         self.Distance_threshold = Distance_threshold
         self.ErrorRegion_threshold = ErrorRegion_threshold
+
+        self.logger = logging.getLogger("gcn_stream.gw_alert")
 
     @property
     def event(self) -> dict[str, Any]:
@@ -345,7 +352,7 @@ class GW_alert:
             mean_distance,
             mean_sigma_dist,
         )
-    
+
     class GRANDMA_Action(Enum):
         GO_GRANDMA = "🚀 *GO GRANDMA*"
         NO_GRANDMA = "❌ *NO GRANDMA*"

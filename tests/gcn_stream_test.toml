@@ -12,3 +12,11 @@ topics = ["igwn.gwalert"]
 
 [PATH]
 log_path = "gcn_stream.log"
+
+[Threshold]
+BBH_proba = 0.5       # between 0 and 1
+Distance_cut = 500    # in Mpc
+Size_region_cut = 500 # in deg²
+
+[Slack]
+gw_alert_channel = "#test_gwalerts"
