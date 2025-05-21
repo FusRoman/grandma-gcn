@@ -4,7 +4,7 @@ import pytest
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 
 from astropy.time import Time
-from numpy import inf
+from numpy import inf, logical_not, isinf, mean
 
 
 @pytest.fixture
@@ -197,9 +197,20 @@ def test_S241102_update(S241102_update: GW_alert):
     ]
 
 
-def test_flatten(gw_alert_unsignificant: GW_alert):
+def test_flatten(S241102_update: GW_alert):
 
-    flat_map = gw_alert_unsignificant.flatten_skymap(8)
+    flat_map = S241102_update.flatten_skymap(64)
 
-    assert flat_map.shape == (768,)
-    assert flat_map.sum() == pytest.approx(3911.3918478153646, rel=1e-2)
+    not_inf_dist = logical_not(isinf(flat_map["DISTMU"]))
+
+    assert flat_map["PROBDENSITY"].shape == (49152,)
+    assert flat_map["PROBDENSITY"].sum() == pytest.approx(1693447.4464275949, rel=1e-2)
+
+    assert flat_map["DISTMU"].shape == (49152,)
+    assert mean(flat_map["DISTMU"], where=not_inf_dist) == pytest.approx(
+        0.3671584651841569, rel=1e-2
+    )
+    assert flat_map["DISTSIGMA"].shape == (49152,)
+    assert flat_map["DISTSIGMA"].sum() == pytest.approx(5137.856116661463, rel=1e-2)
+    assert flat_map["DISTNORM"].shape == (49152,)
+    assert flat_map["DISTNORM"].sum() == pytest.approx(2453462276.0800576, rel=1e-2)

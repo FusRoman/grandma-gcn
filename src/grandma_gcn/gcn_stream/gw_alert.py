@@ -11,7 +11,19 @@ from astropy.time import Time
 
 from astropy.table import QTable
 import astropy.units as astro_units
-from numpy import array, cumsum, float64, inf, isinf, logical_not, mean, ndarray, zeros
+from numpy import (
+    array,
+    cumsum,
+    float64,
+    inf,
+    isinf,
+    logical_not,
+    mean,
+    ndarray,
+    zeros,
+    where,
+    errstate,
+)
 
 from astropy_healpix import uniq_to_level_ipix
 from healpy import nest2ring, nside2npix
@@ -484,51 +496,92 @@ class GW_alert:
         self.logger.info(f"New GW notice saved with id={notice_id}")
         return path_to_save
 
-    def flatten_skymap(self, nside_target: int) -> ndarray:
+    def flatten_skymap(self, nside_target: int) -> dict:
         """
         Flatten the skymap to a 1D array with nside_target resolution.
-        The skymap is degraded or refined to the target nside.
 
         Parameters
         ----------
         nside_target : int
             The target nside for the flattened skymap.
+
         Returns
         -------
-        ndarray
-            The flattened skymap as a 1D array.
+        dict
+            Dictionary with keys:
+                - "PROBDENSITY": 1D array
+                - "DISTMU": 1D array (if present)
+                - "DISTSIGMA": 1D array (if present)
+                - "DISTNORM": 1D array (if present)
         """
         skymap = self.get_skymap()
 
         uniq = skymap["UNIQ"]
         probs = skymap["PROBDENSITY"]
+        has_dist = all(
+            col in skymap.colnames for col in ["DISTMU", "DISTSIGMA", "DISTNORM"]
+        )
 
-        # Convert UNIQ indices to HEALPix order and pixel index
+        if has_dist:
+            distmu = skymap["DISTMU"]
+            distsigma = skymap["DISTSIGMA"]
+            distnorm = skymap["DISTNORM"]
+
         orders, ipix = uniq_to_level_ipix(uniq)
-
-        # Compute the number of pixels for the target nside
         npix_target = nside2npix(nside_target)
-        flat_map = zeros(npix_target, dtype=float64)
 
-        # Loop over each pixel in the original skymap
-        for o, p, prob in zip(orders, ipix, probs):
+        flat_map = zeros(npix_target, dtype=float64)
+        distmu_map = zeros(npix_target, dtype=float64) if has_dist else None
+        distsigma_map = zeros(npix_target, dtype=float64) if has_dist else None
+        distnorm_map = zeros(npix_target, dtype=float64) if has_dist else None
+
+        for i, (o, p, prob) in enumerate(zip(orders, ipix, probs)):
+            prob_val = prob.value
             nside_src = 2**o
+
+            if has_dist:
+                mu = distmu[i].value
+                sigma = distsigma[i].value
+                norm_ = distnorm[i].value
+
             if nside_src > nside_target:
-                # If the source nside is higher than the target, degrade resolution
-                # Convert the pixel index from source nside to target nside using nest2ring
                 ipix_target = nest2ring(
                     nside_target,
                     nest2ring(nside_src, p) * (nside_target // nside_src) ** 2,
                 )
-                # Add the probability density to the corresponding pixel in the target map
-                flat_map[ipix_target] += prob.value
+                flat_map[ipix_target] += prob_val
+                if has_dist:
+                    distmu_map[ipix_target] += mu * prob_val
+                    distsigma_map[ipix_target] += sigma * prob_val
+                    distnorm_map[ipix_target] += norm_ * prob_val
             else:
-                # If the source nside is lower or equal, refine resolution
-                # Compute how many subpixels the source pixel covers in the target map
                 factor = (nside_target // nside_src) ** 2
                 subpix_base = p * factor
-                # Distribute the probability density equally among the subpixels
-                for i in range(factor):
-                    flat_map[subpix_base + i] += (prob / factor).value
+                for i_sub in range(factor):
+                    idx = subpix_base + i_sub
+                    w = prob_val / factor
+                    flat_map[idx] += w
+                    if has_dist:
+                        distmu_map[idx] += mu * w
+                        distsigma_map[idx] += sigma * w
+                        distnorm_map[idx] += norm_ * w
 
-        return flat_map
+        if has_dist:
+            with errstate(invalid="ignore", divide="ignore"):
+                distmu_map = where(flat_map > 0, distmu_map / flat_map, 0)
+                distsigma_map = where(flat_map > 0, distsigma_map / flat_map, 0)
+                distnorm_map = where(flat_map > 0, distnorm_map / flat_map, 0)
+
+        result = {"PROBDENSITY": flat_map}
+        if has_dist:
+            result.update(
+                {
+                    "DISTMU": distmu_map,
+                    "DISTSIGMA": distsigma_map,
+                    "DISTNORM": distnorm_map,
+                }
+            )
+        return result
+
+
+#
