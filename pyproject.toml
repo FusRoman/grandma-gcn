@@ -36,3 +36,28 @@ test = [
 ]
 
 lint = ["black>=24.10.0", "pre-commit>=4.0.1", "pylint>=3.3.2"]
+
+[tool.black]
+target-version = ['py312']
+include = '\.pyi?$'
+
+[tool.pylint]
+disable = "all"
+enable = [
+    "redefined-builtin",
+    "unreachable",
+    "duplicate-key",
+    "unnecessary-semicolon",
+    "global-variable-not-assigned",
+    "unused-variable",
+    "binary-op-exception",
+    "bad-format-string",
+    "anomalous-backslash-in-string",
+    "bad-open-mode",
+]
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "E701", "E501"]
+exclude = [".git", "__pycache__", "build", "dist", "*.egg-info"]
+max-complexity = 10

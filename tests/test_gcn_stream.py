@@ -185,7 +185,9 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
     mock_message.topic.return_value = "igwn.gwalert"
     mock_message.offset.return_value = 42
     mock_message.error.return_value = None
-    mock_message.value.return_value = open_notice_file(Path("tests"), "S241102br-update.json")
+    mock_message.value.return_value = open_notice_file(
+        Path("tests"), "S241102br-update.json"
+    )
 
     # Add the mocked message to the queue
     message_queue.append(mock_message)

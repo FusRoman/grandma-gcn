@@ -11,10 +11,6 @@ from astropy.table import QTable
 import astropy.units as astro_units
 from numpy import array, cumsum, float64, inf, isinf, logical_not, mean, ndarray
 
-from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
-
-from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
-
 
 def bytes_to_dict(notice: bytes) -> dict:
     """
@@ -388,6 +384,9 @@ class GW_alert:
         conclusion = self.GRANDMA_Action.NO_GRANDMA
 
         _, size_region, mean_dist, _ = self.get_error_region(0.9)
+
+        if not self.is_real_observation():
+            return score, msg, conclusion
 
         match self.event_type:
             case self.EventType.RETRACTION:

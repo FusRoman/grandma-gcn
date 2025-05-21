@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from grandma_gcn.gcn_stream.consumer import Consumer
 import tomli

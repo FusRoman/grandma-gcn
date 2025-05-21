@@ -4,12 +4,11 @@ import logging
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.slackbot.gw_message import send_alert_to_slack
 
-logger = logging.getLogger(__name__)
-
 
 class Consumer(KafkaConsumer):
     def __init__(self, *, gcn_stream) -> None:
-        gcn_stream.logger.info("Starting GCN stream consumer")
+        self.logger = logging.getLogger("gcn_stream.consumer")
+        self.logger.info("Starting GCN stream consumer")
 
         super().__init__(
             config=gcn_stream.gcn_config["KAFKA_CONFIG"],
@@ -31,8 +30,6 @@ class Consumer(KafkaConsumer):
             )
         else:
             self.subscribe(topics)
-
-        self.logger = logging.getLogger("gcn_stream.consumer")
 
     @staticmethod
     def assign_partition(consumer: "Consumer", partitions) -> None:
@@ -99,15 +96,15 @@ class Consumer(KafkaConsumer):
             message = self.poll(timeout=interval_between_polls)
             if message is not None:
 
-                logger.info("-- A new notice has arrived --")
-                logger.info(f"topic: {message.topic()}")
-                logger.info(f"current offset: {message.offset()}")
+                self.logger.info("-- A new notice has arrived --")
+                self.logger.info(f"topic: {message.topic()}")
+                self.logger.info(f"current offset: {message.offset()}")
                 if message.error():
-                    logger.error(message.error())
+                    self.logger.error(message.error())
                     continue
                 try:
                     self.process_alert(notice=message.value())
                     self.commit(message)
                 except Exception as err:
-                    logger.error(err)
+                    self.logger.error(err)
                     continue

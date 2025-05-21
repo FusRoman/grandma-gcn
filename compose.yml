@@ -13,6 +13,8 @@ services:
         - PROJECT_UID=${PROJECT_UID}
         - PROJECT_GID=${PROJECT_GID}
     user: "${PROJECT_UID}:${PROJECT_GID}"
+    volumes:
+      - ../grandma-gcn:/home/${USR}/code/
     depends_on:
       - celery_worker
     # command: tail -F anything
@@ -28,3 +30,7 @@ services:
     depends_on:
       - redis
     command: ["python", "-m", "celery", "-A", "grandma_gcn.worker.celery_app", "worker", "--loglevel", "DEBUG"]
+
+volumes:
+  app_log:
+    name: "app_log_volume"
