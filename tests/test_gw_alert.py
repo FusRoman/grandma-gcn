@@ -15,7 +15,6 @@ def path_tests():
 
 def open_notice_file(path_test, name_file):
     path_notice = Path(path_test, "notice_examples", name_file)
-    print(f"Opening {path_notice}")
     with open(path_notice, "rb") as fp:
         return fp.read()
 

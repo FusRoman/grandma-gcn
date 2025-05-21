@@ -215,7 +215,7 @@ def send_alert_to_slack(
         channel,
         [msg],
         logger=logger,
-        verbose=True,
+        verbose=False,
     )
 
     logger.info("Alert sent to Slack channel: {}".format(channel))

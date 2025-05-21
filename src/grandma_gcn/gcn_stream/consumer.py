@@ -75,7 +75,6 @@ class Consumer(KafkaConsumer):
             ],
         )
         score, _, _ = gw_alert.gw_score()
-        print(score)
         if score > 1:
             self.logger.info("Significant alert detected")
             send_alert_to_slack(
