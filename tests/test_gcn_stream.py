@@ -238,4 +238,3 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
         with open(saved_files[0], "r") as f:
             saved_notice = json.load(f)
         assert saved_notice["superevent_id"] == "S241102br"  # Example assertion
-

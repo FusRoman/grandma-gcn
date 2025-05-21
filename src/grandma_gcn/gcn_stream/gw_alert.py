@@ -478,7 +478,5 @@ class GW_alert:
         path_to_save = Path(start_path, f"{notice_id}.json")
         save_as_json(self.gw_dict, path_to_save)
 
-        self.logger.info(
-            f"New GW notice saved with id={notice_id}"
-        )
+        self.logger.info(f"New GW notice saved with id={notice_id}")
         return path_to_save
