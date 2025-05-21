@@ -582,6 +582,3 @@ class GW_alert:
                 }
             )
         return result
-
-
-#
