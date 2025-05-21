@@ -11,7 +11,10 @@ from astropy.time import Time
 
 from astropy.table import QTable
 import astropy.units as astro_units
-from numpy import array, cumsum, float64, inf, isinf, logical_not, mean, ndarray
+from numpy import array, cumsum, float64, inf, isinf, logical_not, mean, ndarray, zeros
+
+from astropy_healpix import uniq_to_level_ipix
+from healpy import nest2ring, nside2npix
 
 
 def bytes_to_dict(notice: bytes) -> dict:
@@ -480,3 +483,52 @@ class GW_alert:
 
         self.logger.info(f"New GW notice saved with id={notice_id}")
         return path_to_save
+
+    def flatten_skymap(self, nside_target: int) -> ndarray:
+        """
+        Flatten the skymap to a 1D array with nside_target resolution.
+        The skymap is degraded or refined to the target nside.
+
+        Parameters
+        ----------
+        nside_target : int
+            The target nside for the flattened skymap.
+        Returns
+        -------
+        ndarray
+            The flattened skymap as a 1D array.
+        """
+        skymap = self.get_skymap()
+
+        uniq = skymap["UNIQ"]
+        probs = skymap["PROBDENSITY"]
+
+        # Convert UNIQ indices to HEALPix order and pixel index
+        orders, ipix = uniq_to_level_ipix(uniq)
+
+        # Compute the number of pixels for the target nside
+        npix_target = nside2npix(nside_target)
+        flat_map = zeros(npix_target, dtype=float64)
+
+        # Loop over each pixel in the original skymap
+        for o, p, prob in zip(orders, ipix, probs):
+            nside_src = 2**o
+            if nside_src > nside_target:
+                # If the source nside is higher than the target, degrade resolution
+                # Convert the pixel index from source nside to target nside using nest2ring
+                ipix_target = nest2ring(
+                    nside_target,
+                    nest2ring(nside_src, p) * (nside_target // nside_src) ** 2,
+                )
+                # Add the probability density to the corresponding pixel in the target map
+                flat_map[ipix_target] += prob.value
+            else:
+                # If the source nside is lower or equal, refine resolution
+                # Compute how many subpixels the source pixel covers in the target map
+                factor = (nside_target // nside_src) ** 2
+                subpix_base = p * factor
+                # Distribute the probability density equally among the subpixels
+                for i in range(factor):
+                    flat_map[subpix_base + i] += (prob / factor).value
+
+        return flat_map

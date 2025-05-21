@@ -195,3 +195,11 @@ def test_S241102_update(S241102_update: GW_alert):
         GW_alert.Instrument.L1,
         GW_alert.Instrument.V1,
     ]
+
+
+def test_flatten(gw_alert_unsignificant: GW_alert):
+
+    flat_map = gw_alert_unsignificant.flatten_skymap(8)
+
+    assert flat_map.shape == (768,)
+    assert flat_map.sum() == pytest.approx(3911.3918478153646, rel=1e-2)
