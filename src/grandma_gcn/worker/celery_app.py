@@ -57,3 +57,5 @@ if env_file_variable in environ:
     )
 
 celery = initialize_celery(Path(name_env_file))
+
+from grandma_gcn.worker.gwemopt_worker import gwemopt_task  # noqa: E402, F401

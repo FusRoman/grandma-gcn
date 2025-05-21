@@ -17,8 +17,8 @@ services:
       - ../grandma-gcn:/home/${USR}/code/
     depends_on:
       - celery_worker
-    # command: tail -F anything
-    command: ["python" , "src/grandma_gcn/gcn_stream/stream.py", "--gcn-config-path", "gcn_stream_config.toml"]
+    command: tail -F anything
+    # command: ["python" , "src/grandma_gcn/gcn_stream/stream.py", "--gcn-config-path", "gcn_stream_config.toml"]
 
   redis:
     image: redis:6.0.5
@@ -27,8 +27,12 @@ services:
 
   celery_worker:
     image: grandma_gcn_app
+    env_file:
+      - .env
     depends_on:
       - redis
+    volumes:
+      - ../grandma-gcn:/home/${USR}/code/
     command: ["python", "-m", "celery", "-A", "grandma_gcn.worker.celery_app", "worker", "--loglevel", "DEBUG"]
 
 volumes:
