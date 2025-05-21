@@ -3,7 +3,9 @@ from enum import Enum
 import io
 import json
 import logging
+from pathlib import Path
 from typing import Any, Self
+import uuid
 
 from astropy.time import Time
 
@@ -30,6 +32,22 @@ def bytes_to_dict(notice: bytes) -> dict:
     return json.load(io.BytesIO(notice))
 
 
+def save_as_json(dict_notice: dict, save_path: Path) -> None:
+    """
+    Save a notice as a json file.
+    The notice have to be a python dictionary, json compatible.
+
+    Parameters
+    ----------
+    dict_notice : dict
+        The gcn notice
+    save_path : Path
+        The path where to save the dictionary
+    """
+    with open(save_path, "w") as fp:
+        json.dump(dict_notice, fp)
+
+
 class GW_alert:
     def __init__(
         self,
@@ -44,7 +62,7 @@ class GW_alert:
         self.Distance_threshold = Distance_threshold
         self.ErrorRegion_threshold = ErrorRegion_threshold
 
-        self.logger = logging.getLogger("gcn_stream.gw_alert")
+        self.logger = logging.getLogger("gcn_stream.gw_alert_{}".format(self.event_id))
 
     @property
     def event(self) -> dict[str, Any]:
@@ -439,3 +457,28 @@ class GW_alert:
                         conclusion = self.GRANDMA_Action.NO_GRANDMA
 
         return score, msg, conclusion
+
+    def save_notice(self, start_path: Path) -> Path:
+        """
+        Save a notice as a json file.The filename will be an hexadecimal random value.
+
+        Parameters
+        ----------
+        start_path : Path
+            path where the notice will be saved
+        logger : LoggerNewLine, optional
+            the logger object, by default None
+
+        Returns
+        -------
+        str
+            the path where the notice has been saved
+        """
+        notice_id = uuid.uuid4().hex
+        path_to_save = Path(start_path, f"{notice_id}.json")
+        save_as_json(self.gw_dict, path_to_save)
+
+        self.logger.info(
+            f"New GW notice saved with id={notice_id}"
+        )
+        return path_to_save

@@ -1,4 +1,6 @@
+import json
 from pathlib import Path
+import tempfile
 
 import pytest
 
@@ -213,13 +215,27 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
         "grandma_gcn.slackbot.gw_message.post_msg_on_slack"
     )
 
-    gcn_stream = GCNStream(gcn_config_path, logger=logger, restart_queue=False)
+    # Create a temporary directory for saving notices
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
 
-    # Run the GCN stream
-    gcn_stream.run(test=True)
+        # Mock the GCNStream.notice_path attribute to use the temporary directory
+        gcn_stream = GCNStream(gcn_config_path, logger=logger, restart_queue=False)
+        mocker.patch.object(gcn_stream, "notice_path", temp_path)
 
-    # Assertions
-    assert mock_poll_method.call_count == 121
-    mock_commit_method.assert_called_once_with(mock_message)
-    mock_post_msg_on_slack.assert_called()  # Ensure post_msg_on_slack is called
-    assert len(message_queue) == 0
+        # Run the GCN stream
+        gcn_stream.run(test=True)
+
+        # Assertions
+        assert mock_poll_method.call_count == 121
+        mock_commit_method.assert_called_once_with(mock_message)
+        mock_post_msg_on_slack.assert_called()  # Ensure post_msg_on_slack is called
+        assert len(message_queue) == 0
+
+        # Verify that the notice was saved to the temporary directory
+        saved_files = list(temp_path.glob("*.json"))
+        assert len(saved_files) == 1  # Ensure one file was saved
+        with open(saved_files[0], "r") as f:
+            saved_notice = json.load(f)
+        assert saved_notice["superevent_id"] == "S241102br"  # Example assertion
+

@@ -39,6 +39,8 @@ class GCNStream:
 
         self.slack_client = init_slackbot(self.logger)
 
+        self.notice_path = Path(self._gcn_config["PATH"]["notice_path"])
+
     @property
     def gcn_config(self) -> dict[str, Any]:
         return self._gcn_config
