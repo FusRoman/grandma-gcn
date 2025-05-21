@@ -2,7 +2,7 @@ from gcn_kafka import Consumer as KafkaConsumer
 import logging
 
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
-from grandma_gcn.slackbot.gw_message import send_alert_to_slack
+from grandma_gcn.slackbot.gw_message import new_gwalert_on_slack
 
 
 class Consumer(KafkaConsumer):
@@ -77,7 +77,7 @@ class Consumer(KafkaConsumer):
 
             gw_alert.save_notice(self.gcn_stream.notice_path)
 
-            send_alert_to_slack(
+            new_gwalert_on_slack(
                 gw_alert,
                 self.gcn_stream.slack_client,
                 channel=self.gw_alert_channel,

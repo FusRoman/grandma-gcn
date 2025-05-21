@@ -186,7 +186,7 @@ def build_gwalert_msg(gw_alert: GW_alert) -> Message:
     return msg
 
 
-def send_alert_to_slack(
+def new_gwalert_on_slack(
     gw_alert: GW_alert,
     slack_client: WebClient,
     channel: str,
