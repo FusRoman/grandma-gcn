@@ -3,11 +3,12 @@ from typing import Any
 from numpy import ndarray
 
 from gwemopt.utils import read_skymap
+from healpy import reorder
 
 
 def make_params(
-    exposure_time: int,
-    max_nb_tile: int,
+    exposure_time: list[int],
+    max_nb_tile: list[int],
     nside: int,
     do_3d: bool,
     do_plot: bool,
@@ -17,6 +18,35 @@ def make_params(
     moon_check: bool,
     do_reference: bool,
 ) -> dict[str, Any]:
+    """
+    Create the parameters for the gwemopt launcher.
+    Parameters
+    ----------
+    exposure_time : list[int]
+        Exposure time in seconds.
+    max_nb_tile : list[int]
+        Maximum number of tiles.
+    nside : int
+        Nside parameter for HEALPix.
+    do_3d : bool
+        Whether to use 3D mode.
+    do_plot : bool
+        Whether to generate plots.
+    do_observability : bool
+        Whether to check observability.
+    do_footprint : bool
+        Whether to generate footprint.
+    do_movie : bool
+        Whether to create a movie.
+    moon_check : bool
+        Whether to check for moon interference.
+    do_reference : bool
+        Whether to use reference images.
+    Returns
+    -------
+    dict[str, Any]
+        A dictionary containing the parameters for the gwemopt launcher.
+    """
     return {
         "config": {},
         "gpstime": None,
@@ -77,18 +107,19 @@ def make_params(
         "doPerturbativeTiling": False,
         "doSingleExposure": True,
         "filters": ["g"],
-        "exposuretimes": [exposure_time, exposure_time, exposure_time, exposure_time],
+        "exposuretimes": exposure_time,
         "mindiff": 1800.0,
         "Moon_check": moon_check,
         "nside": nside,
-        "max_nb_tiles": [max_nb_tile, max_nb_tile, max_nb_tile, max_nb_tile],
+        "max_nb_tiles": max_nb_tile,
     }
 
 
 def init_gwemopt(
     flat_skymap: dict[str, ndarray],
-    exposure_time: int,
-    max_nb_tile: int,
+    convert_to_nested: bool,
+    exposure_time: list[int],
+    max_nb_tile: list[int],
     nside: int,
     do_3d: bool,
     do_plot: bool,
@@ -104,7 +135,9 @@ def init_gwemopt(
     Parameters
     ----------
     flat_skymap : dict[str, ndarray]
-        The flattened skymap data.
+        The flattened skymap data in ring ordering.
+    convert_to_nested : bool
+        Whether to convert the skymap to nested ordering.
     exposure_time : int
         Exposure time in seconds.
     max_nb_tile : int
@@ -143,6 +176,10 @@ def init_gwemopt(
         moon_check,
         do_reference,
     )
+
+    if convert_to_nested:
+        # Convert the flat skymap to nested ordering
+        flat_skymap = {k: reorder(v, n2r=True) for k, v in flat_skymap.items()}
 
     map_struct = read_skymap(params, is3D=params["do3D"], flat_skymap=flat_skymap)
 

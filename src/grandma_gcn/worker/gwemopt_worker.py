@@ -1,10 +1,11 @@
 from pathlib import Path
-import time
 import uuid
 
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.worker.celery_app import celery
 import logging
+
+from grandma_gcn.worker.gwemopt_launcher import init_gwemopt
 
 
 def setup_task_logger(task_name: str) -> logging.Logger:
@@ -44,9 +45,70 @@ def setup_task_logger(task_name: str) -> logging.Logger:
     return logger
 
 
+def run_gwemopt(
+    gw_alert: GW_alert,
+    telescopes: list[str],
+    nb_tiles: list[str],
+    nside: int,
+    path_output: Path,
+    observation_strategy: GW_alert.ObservationStrategy,
+    logger: logging.Logger,
+) -> None:
+    """
+    Run the gwemopt observation plan.
+
+    Parameters
+    ----------100
+    gw_alert : GW_alert
+        The GW_alert object containing the alert information.
+    telescopes : list[str]
+        List of telescopes to use for the observation plan.
+    nside : int
+        The nside parameter for the skymap.
+    path_output : Path
+        Path to the output directory.
+    observation_strategy : GW_alert.ObservationStrategy
+        The observation strategy to use.
+    logger : logging.Logger
+        Logger to use for logging. If None, a new logger will be created.
+    """
+    logger.info("Flattening the skymap...")
+    flat_map = gw_alert.flatten_skymap(nside)
+    logger.info("Flat map created. Initializing gwemopt...")
+
+    params, map_struct = init_gwemopt(
+        flat_map,
+        convert_to_nested=False,
+        exposure_time=[30 for _ in range(len(nb_tiles))],
+        max_nb_tile=nb_tiles,
+        nside=nside,
+        do_3d=False,
+        do_plot=True,
+        do_observability=True,
+        do_footprint=True,
+        do_movie=True,
+        moon_check=False,
+        do_reference=True,
+    )
+
+    logger.info("gwemopt initialized. Running observation plan...")
+    _ = gw_alert.run_observation_plan(
+        telescopes,
+        params,
+        map_struct,
+        str(path_output),
+        observation_strategy,
+    )
+    logger.info("Observation plan completed.")
+
+
 @celery.task(name="gwemopt_task")
 def gwemopt_task(
+    telescopes: list[str],
+    nb_tiles: list[int],
+    nside: int,
     path_notice: str,
+    path_output: str,
     BBH_threshold: float,
     Distance_threshold: float,
     ErrorRegion_threshold: float,
@@ -56,6 +118,10 @@ def gwemopt_task(
 
     Parameters
     ----------
+    telescopes : list[str]
+        List of telescopes to use for the observation plan.
+    path_output : str
+        Path to the output directory.
     path_notice : str
         Path to the GCN notice file.
     BBH_threshold : float
@@ -76,41 +142,21 @@ def gwemopt_task(
             Distance_threshold=Distance_threshold,
             ErrorRegion_threshold=ErrorRegion_threshold,
         )  # Configure a logger specific to this task
+
         logger = setup_task_logger("gwemopt_task_{}".format(gw_alert.event_id))
         logger.info("Starting gwemopt_task...")
-        time.sleep(10)  # Simulate some processing time
+
+        run_gwemopt(
+            gw_alert,
+            telescopes,
+            nb_tiles,
+            nside=nside,
+            path_output=Path(path_output),
+            observation_strategy=GW_alert.ObservationStrategy.TILING,
+            logger=logger,
+        )
+
         logger.info("GW_alert successfully processed.")
     except Exception as e:
         logger.error(f"An error occurred while processing the task: {e}")
-        raise
-
-
-def main():
-    # Chemin vers une notice de test
-    test_notice_path = Path("tests/notice_examples/S241102br-initial.json")
-
-    # Vérifiez que le fichier existe
-    if not test_notice_path.exists():
-        print(f"Le fichier de test {test_notice_path} n'existe pas.")
-        return
-
-    # Paramètres pour la tâche
-    BBH_threshold = 0.5
-    Distance_threshold = 500.0
-    ErrorRegion_threshold = 100.0
-
-    # Lancer la tâche Celery
-    print("Lancement de la tâche Celery...")
-    task = gwemopt_task.delay(
-        str(test_notice_path),
-        BBH_threshold,
-        Distance_threshold,
-        ErrorRegion_threshold,
-    )
-
-    # Afficher l'ID de la tâche
-    print(f"Tâche lancée avec succès. ID de la tâche : {task.id}")
-
-
-if __name__ == "__main__":
-    main()
+        raise e

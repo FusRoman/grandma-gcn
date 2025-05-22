@@ -1,8 +1,11 @@
+from pathlib import Path
 from gcn_kafka import Consumer as KafkaConsumer
 import logging
+import uuid
 
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.slackbot.gw_message import new_gwalert_on_slack
+from grandma_gcn.worker.gwemopt_worker import gwemopt_task
 
 
 class Consumer(KafkaConsumer):
@@ -75,7 +78,7 @@ class Consumer(KafkaConsumer):
         if score > 1:
             self.logger.info("Significant alert detected")
 
-            gw_alert.save_notice(self.gcn_stream.notice_path)
+            path_notice = gw_alert.save_notice(self.gcn_stream.notice_path)
 
             new_gwalert_on_slack(
                 gw_alert,
@@ -83,6 +86,22 @@ class Consumer(KafkaConsumer):
                 channel=self.gw_alert_channel,
                 logger=self.logger,
             )
+
+            path_output = Path(f"{gw_alert.event_id}_gwemopt_output_{uuid.uuid4().hex}")
+
+            self.logger.info("Sending gwemopt task to celery worker")
+            task = gwemopt_task.delay(
+                self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_tiling"],
+                self.gcn_stream.gcn_config["GWEMOPT"]["tiling_nb_tiles"],
+                self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
+                str(path_notice),
+                str(path_output),
+                gw_alert.BBH_threshold,
+                gw_alert.Distance_threshold,
+                gw_alert.ErrorRegion_threshold,
+            )
+
+            self.logger.info(f"Task launched with ID: {task.id}")
 
     def start_poll_loop(
         self, interval_between_polls: int = 1, max_retries: int = 120

@@ -199,6 +199,10 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
         "grandma_gcn.slackbot.gw_message.post_msg_on_slack"
     )
 
+    # Mock gwemopt_task to avoid running the real Celery task
+    mock_gwemopt_task = mocker.patch("grandma_gcn.gcn_stream.consumer.gwemopt_task")
+    mock_gwemopt_task.delay.return_value = mocker.Mock(id=42)
+
     # Create a temporary directory for saving notices
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
@@ -214,6 +218,7 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
         assert mock_poll_method.call_count == 121
         mock_commit_method.assert_called_once_with(mock_message)
         mock_post_msg_on_slack.assert_called()  # Ensure post_msg_on_slack is called
+        mock_gwemopt_task.delay.assert_called()  # Ensure gwemopt_task.delay is called
         assert len(message_queue) == 0
 
         # Verify that the notice was saved to the temporary directory

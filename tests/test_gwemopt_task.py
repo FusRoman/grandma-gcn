@@ -1,5 +1,10 @@
+import tempfile
+import logging
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.worker.gwemopt_launcher import init_gwemopt
+import pytest
+from unittest.mock import patch, MagicMock
+from pathlib import Path
 
 
 def test_init_gwemopt_basic(gw_alert_unsignificant: GW_alert):
@@ -8,8 +13,9 @@ def test_init_gwemopt_basic(gw_alert_unsignificant: GW_alert):
 
     params, map_struct = init_gwemopt(
         flat_map,
-        exposure_time=100,
-        max_nb_tile=10,
+        False,
+        exposure_time=[100],
+        max_nb_tile=[10],
         nside=nside,
         do_3d=False,
         do_plot=False,
@@ -22,8 +28,8 @@ def test_init_gwemopt_basic(gw_alert_unsignificant: GW_alert):
 
     # Vérification des paramètres (inchangé)
     assert isinstance(params, dict)
-    assert params["exposuretimes"] == [100, 100, 100, 100]
-    assert params["max_nb_tiles"] == [10, 10, 10, 10]
+    assert params["exposuretimes"] == [100]
+    assert params["max_nb_tiles"] == [10]
     assert params["nside"] == nside
     assert params["do3D"] is False
     assert params["doPlots"] is False
@@ -72,8 +78,9 @@ def test_init_gwemopt_S241102_update(S241102_update: GW_alert):
 
     params, map_struct = init_gwemopt(
         flat_map,
-        exposure_time=100,
-        max_nb_tile=10,
+        False,
+        exposure_time=[100],
+        max_nb_tile=[10],
         nside=nside,
         do_3d=False,
         do_plot=False,
@@ -86,8 +93,8 @@ def test_init_gwemopt_S241102_update(S241102_update: GW_alert):
 
     # Vérification des paramètres
     assert isinstance(params, dict)
-    assert params["exposuretimes"] == [100, 100, 100, 100]
-    assert params["max_nb_tiles"] == [10, 10, 10, 10]
+    assert params["exposuretimes"] == [100]
+    assert params["max_nb_tiles"] == [10]
     assert params["nside"] == nside
     assert params["do3D"] is False
     assert params["doPlots"] is False
@@ -127,3 +134,52 @@ def test_init_gwemopt_S241102_update(S241102_update: GW_alert):
     # Vérification des champs optionnels si présents (3D)
     for key in ["distmu", "distsigma", "distnorm"]:
         assert map_struct[key].shape == map_struct["prob"].shape
+
+
+@pytest.mark.usefixtures("tmp_path")
+def test_gwemopt_task_celery(tmp_path, S241102_update):
+    # Import ici pour éviter les problèmes d'import circulaire
+    from grandma_gcn.worker.gwemopt_worker import gwemopt_task
+
+    # Create a temporary directory for saving notices
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        notice_path = S241102_update.save_notice(temp_path)
+
+        # Préparation des paramètres
+        telescopes = ["TCH", "TRE"]
+        nb_tiles = [10, 10]
+        nside = 16
+        path_output = tmp_path / "output"
+        BBH_threshold = 0.5
+        Distance_threshold = 500
+        ErrorRegion_threshold = 500
+
+        # Patch Observation_plan_multiple pour éviter le calcul lourd
+        with patch(
+            "grandma_gcn.gcn_stream.gw_alert.Observation_plan_multiple"
+        ) as mock_obs_plan:
+            mock_obs_plan.return_value = (MagicMock(), MagicMock())
+
+            # Patch logger pour éviter la création de fichiers log
+            with patch(
+                "grandma_gcn.worker.gwemopt_worker.setup_task_logger"
+            ) as mock_logger:
+                mock_logger.return_value = logging.getLogger()
+
+                # Exécution synchrone de la tâche celery
+                gwemopt_task.apply(
+                    args=[
+                        telescopes,
+                        nb_tiles,
+                        nside,
+                        str(notice_path),
+                        str(path_output),
+                        BBH_threshold,
+                        Distance_threshold,
+                        ErrorRegion_threshold,
+                    ]
+                )
+
+            # Vérifie que la fonction Observation_plan_multiple a bien été appelée
+            assert mock_obs_plan.called

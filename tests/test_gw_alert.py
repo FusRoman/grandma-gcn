@@ -208,9 +208,9 @@ def test_flatten(S241102_update: GW_alert):
 
     assert flat_map["DISTMU"].shape == (49152,)
     assert mean(flat_map["DISTMU"], where=not_inf_dist) == pytest.approx(
-        0.3671584651841569, rel=1e-2
+        3.083552984013613, rel=1e-2
     )
     assert flat_map["DISTSIGMA"].shape == (49152,)
-    assert flat_map["DISTSIGMA"].sum() == pytest.approx(5137.856116661463, rel=1e-2)
+    assert flat_map["DISTSIGMA"].sum() == pytest.approx(28274.523094610395, rel=1e-2)
     assert flat_map["DISTNORM"].shape == (49152,)
     assert flat_map["DISTNORM"].sum() == pytest.approx(2453462276.0800576, rel=1e-2)

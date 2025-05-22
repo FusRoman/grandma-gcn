@@ -9,7 +9,7 @@ import uuid
 
 from astropy.time import Time
 
-from astropy.table import QTable
+from astropy.table import QTable, Table
 import astropy.units as astro_units
 from numpy import (
     array,
@@ -26,7 +26,9 @@ from numpy import (
 )
 
 from astropy_healpix import uniq_to_level_ipix
-from healpy import nest2ring, nside2npix
+from healpy import pix2ang, ang2pix, nside2npix
+
+from gwemopt.ToO_manager import Observation_plan_multiple
 
 
 def bytes_to_dict(notice: bytes) -> dict:
@@ -499,6 +501,7 @@ class GW_alert:
     def flatten_skymap(self, nside_target: int) -> dict:
         """
         Flatten the skymap to a 1D array with nside_target resolution.
+        The returned map ordering is in ring order.
 
         Parameters
         ----------
@@ -514,8 +517,8 @@ class GW_alert:
                 - "DISTSIGMA": 1D array (if present)
                 - "DISTNORM": 1D array (if present)
         """
-        skymap = self.get_skymap()
 
+        skymap = self.get_skymap()
         uniq = skymap["UNIQ"]
         probs = skymap["PROBDENSITY"]
         has_dist = all(
@@ -527,44 +530,29 @@ class GW_alert:
             distsigma = skymap["DISTSIGMA"]
             distnorm = skymap["DISTNORM"]
 
+        # Convert UNIQ to (level, ipix) and then to theta/phi
         orders, ipix = uniq_to_level_ipix(uniq)
+        nside_srcs = 2**orders
+        theta, phi = pix2ang(nside_srcs, ipix, nest=True)
+
+        ipix_target = ang2pix(nside_target, theta, phi, nest=False)
         npix_target = nside2npix(nside_target)
 
-        flat_map = zeros(npix_target, dtype=float64)
-        distmu_map = zeros(npix_target, dtype=float64) if has_dist else None
-        distsigma_map = zeros(npix_target, dtype=float64) if has_dist else None
-        distnorm_map = zeros(npix_target, dtype=float64) if has_dist else None
+        flat_map = zeros(npix_target)
+        distmu_map = zeros(npix_target) if has_dist else None
+        distsigma_map = zeros(npix_target) if has_dist else None
+        distnorm_map = zeros(npix_target) if has_dist else None
 
-        for i, (o, p, prob) in enumerate(zip(orders, ipix, probs)):
-            prob_val = prob.value
-            nside_src = 2**o
-
+        for i, ipix_t in enumerate(ipix_target):
+            prob_val = probs[i].value
+            flat_map[ipix_t] += prob_val
             if has_dist:
                 mu = distmu[i].value
                 sigma = distsigma[i].value
                 norm_ = distnorm[i].value
-
-            if nside_src > nside_target:
-                ipix_target = nest2ring(
-                    nside_target,
-                    nest2ring(nside_src, p) * (nside_target // nside_src) ** 2,
-                )
-                flat_map[ipix_target] += prob_val
-                if has_dist:
-                    distmu_map[ipix_target] += mu * prob_val
-                    distsigma_map[ipix_target] += sigma * prob_val
-                    distnorm_map[ipix_target] += norm_ * prob_val
-            else:
-                factor = (nside_target // nside_src) ** 2
-                subpix_base = p * factor
-                for i_sub in range(factor):
-                    idx = subpix_base + i_sub
-                    w = prob_val / factor
-                    flat_map[idx] += w
-                    if has_dist:
-                        distmu_map[idx] += mu * w
-                        distsigma_map[idx] += sigma * w
-                        distnorm_map[idx] += norm_ * w
+                distmu_map[ipix_t] += mu * prob_val
+                distsigma_map[ipix_t] += sigma * prob_val
+                distnorm_map[ipix_t] += norm_ * prob_val
 
         if has_dist:
             with errstate(invalid="ignore", divide="ignore"):
@@ -582,3 +570,49 @@ class GW_alert:
                 }
             )
         return result
+
+    class ObservationStrategy(Enum):
+        TILING = "Tiling"
+        GALAXYTARGETING = "Galaxy targeting"
+
+    def run_observation_plan(
+        self,
+        telescope_list: list[str],
+        params: dict[str, Any],
+        map_struct: dict[str, Any],
+        path_output: str,
+        observation_strategy: ObservationStrategy,
+    ) -> tuple[Table, Any]:
+        """
+        Launch the gwemopt process with the given parameters and skymap structure.
+        Becareful, the input map ordering have to be in nested order.
+
+        Parameters
+        ----------
+        telescope_list : list[str]
+            The list of telescopes to use for the observation.
+        params : dict[str, Any]
+            The parameters for the gwemopt process.
+        map_struct : dict[str, Any]
+            The skymap structure.
+        path_output : str
+            The path where the output will be saved.
+        observation_strategy : ObservationStrategy
+            The observation strategy to use (TILING or GALAXYTARGETING).
+
+        Returns
+        -------
+        tuple[Table, Any]
+            - tiles_tables: the table of tiles generated by gwemopt
+            - galaxies_table: the table of galaxies generated by gwemopt
+        """
+
+        return Observation_plan_multiple(
+            telescope_list,
+            self.get_event_time(),
+            self.event_id,
+            params,
+            map_struct,
+            observation_strategy.value,
+            path_output,
+        )
