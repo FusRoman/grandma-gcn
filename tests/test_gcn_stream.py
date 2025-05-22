@@ -9,22 +9,6 @@ from grandma_gcn.gcn_stream.gcn_logging import init_logging
 from tests.test_gw_alert import open_notice_file
 
 
-@pytest.fixture
-def logger():
-    """
-    Fixture to initialize the logger
-    """
-    return init_logging()
-
-
-@pytest.fixture
-def gcn_config_path():
-    """
-    Fixture to provide the path to the GCN configuration file
-    """
-    return Path("tests/gcn_stream_test.toml")
-
-
 def test_init_gcn_stream(gcn_config_path, logger):
     """
     Test the initialization of the GCN stream
