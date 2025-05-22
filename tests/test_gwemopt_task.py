@@ -6,6 +6,8 @@ import pytest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 
+from grandma_gcn.worker.gwemopt_worker import gwemopt_task
+
 
 def test_init_gwemopt_basic(gw_alert_unsignificant: GW_alert):
     nside = 16
@@ -138,8 +140,6 @@ def test_init_gwemopt_S241102_update(S241102_update: GW_alert):
 
 @pytest.mark.usefixtures("tmp_path")
 def test_gwemopt_task_celery(tmp_path, S241102_update):
-    # Import ici pour éviter les problèmes d'import circulaire
-    from grandma_gcn.worker.gwemopt_worker import gwemopt_task
 
     # Create a temporary directory for saving notices
     with tempfile.TemporaryDirectory() as temp_dir:
