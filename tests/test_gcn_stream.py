@@ -1,26 +1,12 @@
+import json
 from pathlib import Path
+import tempfile
 
 import pytest
 
 from grandma_gcn.gcn_stream.consumer import Consumer
 from grandma_gcn.gcn_stream.gcn_logging import init_logging
 from tests.test_gw_alert import open_notice_file
-
-
-@pytest.fixture
-def logger():
-    """
-    Fixture to initialize the logger
-    """
-    return init_logging()
-
-
-@pytest.fixture
-def gcn_config_path():
-    """
-    Fixture to provide the path to the GCN configuration file
-    """
-    return Path("tests/gcn_stream_test.toml")
 
 
 def test_init_gcn_stream(gcn_config_path, logger):
@@ -185,7 +171,9 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
     mock_message.topic.return_value = "igwn.gwalert"
     mock_message.offset.return_value = 42
     mock_message.error.return_value = None
-    mock_message.value.return_value = open_notice_file(Path("tests"), "S241102br-update.json")
+    mock_message.value.return_value = open_notice_file(
+        Path("tests"), "S241102br-update.json"
+    )
 
     # Add the mocked message to the queue
     message_queue.append(mock_message)
@@ -211,13 +199,31 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
         "grandma_gcn.slackbot.gw_message.post_msg_on_slack"
     )
 
-    gcn_stream = GCNStream(gcn_config_path, logger=logger, restart_queue=False)
+    # Mock gwemopt_task to avoid running the real Celery task
+    mock_gwemopt_task = mocker.patch("grandma_gcn.gcn_stream.consumer.gwemopt_task")
+    mock_gwemopt_task.delay.return_value = mocker.Mock(id=42)
 
-    # Run the GCN stream
-    gcn_stream.run(test=True)
+    # Create a temporary directory for saving notices
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
 
-    # Assertions
-    assert mock_poll_method.call_count == 121
-    mock_commit_method.assert_called_once_with(mock_message)
-    mock_post_msg_on_slack.assert_called()  # Ensure post_msg_on_slack is called
-    assert len(message_queue) == 0
+        # Mock the GCNStream.notice_path attribute to use the temporary directory
+        gcn_stream = GCNStream(gcn_config_path, logger=logger, restart_queue=False)
+        mocker.patch.object(gcn_stream, "notice_path", temp_path)
+
+        # Run the GCN stream
+        gcn_stream.run(test=True)
+
+        # Assertions
+        assert mock_poll_method.call_count == 121
+        mock_commit_method.assert_called_once_with(mock_message)
+        mock_post_msg_on_slack.assert_called()  # Ensure post_msg_on_slack is called
+        mock_gwemopt_task.delay.assert_called()  # Ensure gwemopt_task.delay is called
+        assert len(message_queue) == 0
+
+        # Verify that the notice was saved to the temporary directory
+        saved_files = list(temp_path.glob("*.json"))
+        assert len(saved_files) == 1  # Ensure one file was saved
+        with open(saved_files[0], "r") as f:
+            saved_notice = json.load(f)
+        assert saved_notice["superevent_id"] == "S241102br"  # Example assertion

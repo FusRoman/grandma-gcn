@@ -1,0 +1,40 @@
+services:
+  gcn_stream:
+    image: grandma_gcn_app
+    env_file:
+      - .env
+    build:
+      context: ./
+      dockerfile: dockerfile
+      target: base
+      args:
+        - USR=${USR}
+        - USR_GROUP=${USR_GROUP}
+        - PROJECT_UID=${PROJECT_UID}
+        - PROJECT_GID=${PROJECT_GID}
+    user: "${PROJECT_UID}:${PROJECT_GID}"
+    volumes:
+      - ../grandma-gcn:/home/${USR}/code/
+    depends_on:
+      - celery_worker
+    command: tail -F anything
+    # command: ["python" , "src/grandma_gcn/gcn_stream/stream.py", "--gcn-config-path", "gcn_stream_config.toml"]
+
+  redis:
+    image: redis:6.0.5
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+
+  celery_worker:
+    image: grandma_gcn_app
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    volumes:
+      - ../grandma-gcn:/home/${USR}/code/
+    command: ["python", "-m", "celery", "-A", "grandma_gcn.worker.celery_app", "worker", "--loglevel", "DEBUG"]
+
+volumes:
+  app_log:
+    name: "app_log_volume"

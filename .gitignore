@@ -162,3 +162,4 @@ cython_debug/
 #.idea/
 
 gcn_stream_config.toml
+slack.secret

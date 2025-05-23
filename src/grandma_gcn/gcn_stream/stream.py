@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from grandma_gcn.gcn_stream.consumer import Consumer
 import tomli
@@ -38,6 +38,8 @@ class GCNStream:
         self.restart_queue = restart_queue
 
         self.slack_client = init_slackbot(self.logger)
+
+        self.notice_path = Path(self._gcn_config["PATH"]["notice_path"])
 
     @property
     def gcn_config(self) -> dict[str, Any]:

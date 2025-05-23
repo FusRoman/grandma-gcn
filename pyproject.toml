@@ -14,6 +14,9 @@ dependencies = [
     "typing-extensions>=4.13.2",
     "astropy>=7.0.2",
     "astropy-healpix>=1.1.2",
+    "celery[redis]>=5.5.2",
+    "dotenv>=0.9.9",
+    "gwemopt @ git+https://github.com/FusRoman/old_gwemopt@2daa8931271af4feca65bf827742acefc19df3c7",
 ]
 requires-python = ">=3.12"
 readme = "README.md"
@@ -34,3 +37,28 @@ test = [
 ]
 
 lint = ["black>=24.10.0", "pre-commit>=4.0.1", "pylint>=3.3.2"]
+
+[tool.black]
+target-version = ['py312']
+include = '\.pyi?$'
+
+[tool.pylint]
+disable = "all"
+enable = [
+    "redefined-builtin",
+    "unreachable",
+    "duplicate-key",
+    "unnecessary-semicolon",
+    "global-variable-not-assigned",
+    "unused-variable",
+    "binary-op-exception",
+    "bad-format-string",
+    "anomalous-backslash-in-string",
+    "bad-open-mode",
+]
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "E701", "E501"]
+exclude = [".git", "__pycache__", "build", "dist", "*.egg-info"]
+max-complexity = 10
