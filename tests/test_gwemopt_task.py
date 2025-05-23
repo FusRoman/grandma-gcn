@@ -2,7 +2,7 @@ import tempfile
 import logging
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.gcn_stream.stream import load_gcn_config
-from grandma_gcn.worker.gwemopt_launcher import init_gwemopt
+from grandma_gcn.worker.gwemopt_init import init_gwemopt
 import pytest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
