@@ -27,4 +27,4 @@ telescopes_tiling = ["TCH","TRE","TCA","FZU-CTA-N","FZU-Auger"]
 tiling_nb_tiles = [10,10,10,15,15]
 telescopes_galaxy = ["KAO"]
 nb_galaxies = [10]
-nside_flat = 512
+nside_flat = 64

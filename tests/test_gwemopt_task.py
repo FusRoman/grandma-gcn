@@ -1,12 +1,20 @@
 import tempfile
 import logging
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
+from grandma_gcn.gcn_stream.stream import load_gcn_config
 from grandma_gcn.worker.gwemopt_launcher import init_gwemopt
 import pytest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 
 from grandma_gcn.worker.gwemopt_worker import gwemopt_task
+from tests.test_gw_alert import open_notice_file
+from grandma_gcn.worker.celery_app import celery
+
+
+@pytest.fixture(autouse=True)
+def celery_eager():
+    celery.conf.update(task_always_eager=True)
 
 
 def test_init_gwemopt_basic(gw_alert_unsignificant: GW_alert):
@@ -181,5 +189,40 @@ def test_gwemopt_task_celery(tmp_path, S241102_update):
                     ]
                 )
 
-            # Vérifie que la fonction Observation_plan_multiple a bien été appelée
             assert mock_obs_plan.called
+
+
+def test_process_alert_calls(mocker):
+    """
+    Teste que process_alert crée bien un GW_alert et retourne un message selon le score.
+    """
+    from grandma_gcn.gcn_stream.consumer import Consumer
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Mock gcn_stream et sa config
+        mock_gcn_stream = MagicMock()
+        mock_gcn_stream.gcn_config = load_gcn_config(
+            Path("tests", "gcn_stream_test.toml"), logger=logging.getLogger()
+        )
+        mock_gcn_stream.notice_path = temp_path
+
+        notice = open_notice_file(Path("tests"), "S241102br-update.json")
+
+        mock_post_msg_on_slack = mocker.patch(
+            "grandma_gcn.slackbot.gw_message.post_msg_on_slack"
+        )
+
+        # Patch Observation_plan_multiple pour éviter le calcul lourd
+        with patch(
+            "grandma_gcn.gcn_stream.gw_alert.Observation_plan_multiple"
+        ) as mock_obs_plan:
+            mock_obs_plan.return_value = (MagicMock(), MagicMock())
+
+            consumer = Consumer(gcn_stream=mock_gcn_stream)
+            consumer.process_alert(notice)
+
+            assert mock_obs_plan.call_count == 2
+
+            mock_post_msg_on_slack.assert_called_once()

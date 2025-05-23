@@ -52,17 +52,13 @@ class Consumer(KafkaConsumer):
             p.offset = 0
         consumer.assign(partitions)
 
-    def process_alert(self, notice: bytes) -> str:
+    def process_alert(self, notice: bytes) -> None:
         """
         Process the alert and return a message.
 
         Parameters
         -----------
             notice (bytes): The alert notice in bytes.
-
-        Returns
-        -------
-            str: The processed message.
         """
         self.logger.info("Processing alert")
 
@@ -90,7 +86,7 @@ class Consumer(KafkaConsumer):
             path_output = Path(f"{gw_alert.event_id}_gwemopt_output_{uuid.uuid4().hex}")
 
             self.logger.info("Sending gwemopt task to celery worker")
-            task = gwemopt_task.delay(
+            task_tiling = gwemopt_task.delay(
                 self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_tiling"],
                 self.gcn_stream.gcn_config["GWEMOPT"]["tiling_nb_tiles"],
                 self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
@@ -101,7 +97,24 @@ class Consumer(KafkaConsumer):
                 gw_alert.ErrorRegion_threshold,
             )
 
-            self.logger.info(f"Task launched with ID: {task.id}")
+            self.logger.info(
+                f"Gwemopt launched for tiling telescopes with ID: {task_tiling.id}"
+            )
+
+            task_galaxy = gwemopt_task.delay(
+                self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_galaxy"],
+                self.gcn_stream.gcn_config["GWEMOPT"]["nb_galaxies"],
+                self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
+                str(path_notice),
+                str(path_output),
+                gw_alert.BBH_threshold,
+                gw_alert.Distance_threshold,
+                gw_alert.ErrorRegion_threshold,
+            )
+
+            self.logger.info(
+                f"Gwemopt launched for galaxy targeting telescopes with ID: {task_galaxy.id}"
+            )
 
     def start_poll_loop(
         self, interval_between_polls: int = 1, max_retries: int = 120
