@@ -83,7 +83,12 @@ class Consumer(KafkaConsumer):
                 logger=self.logger,
             )
 
-            path_output = Path(f"{gw_alert.event_id}_gwemopt_output_{uuid.uuid4().hex}")
+            path_output_tiling = Path(
+                f"{gw_alert.event_id}_gwemopt_tiling_{uuid.uuid4().hex}"
+            )
+            path_output_galaxy = Path(
+                f"{gw_alert.event_id}_gwemopt_galaxy_{uuid.uuid4().hex}"
+            )
 
             self.logger.info("Sending gwemopt task to celery worker")
             task_tiling = gwemopt_task.delay(
@@ -91,7 +96,7 @@ class Consumer(KafkaConsumer):
                 self.gcn_stream.gcn_config["GWEMOPT"]["tiling_nb_tiles"],
                 self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
                 str(path_notice),
-                str(path_output),
+                str(path_output_tiling),
                 gw_alert.BBH_threshold,
                 gw_alert.Distance_threshold,
                 gw_alert.ErrorRegion_threshold,
@@ -106,7 +111,7 @@ class Consumer(KafkaConsumer):
                 self.gcn_stream.gcn_config["GWEMOPT"]["nb_galaxies"],
                 self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
                 str(path_notice),
-                str(path_output),
+                str(path_output_galaxy),
                 gw_alert.BBH_threshold,
                 gw_alert.Distance_threshold,
                 gw_alert.ErrorRegion_threshold,

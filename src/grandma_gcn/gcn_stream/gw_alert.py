@@ -23,12 +23,16 @@ from numpy import (
     zeros,
     where,
     errstate,
+    degrees,
 )
 
 from astropy_healpix import uniq_to_level_ipix
-from healpy import pix2ang, ang2pix, nside2npix
+from healpy import nside2npix, pix2ang
 
 from gwemopt.ToO_manager import Observation_plan_multiple
+
+from astropy_healpix import HEALPix, level_to_nside
+import astropy.units as u
 
 
 def bytes_to_dict(notice: bytes) -> dict:
@@ -500,59 +504,72 @@ class GW_alert:
 
     def flatten_skymap(self, nside_target: int) -> dict:
         """
-        Flatten the skymap to a 1D array with nside_target resolution.
-        The returned map ordering is in ring order.
+        Convert a multi-resolution skymap to a flat skymap with a given nside.
+        The skymap is flattened by summing the probabilities of the pixels
+        that fall into the same pixel of the target nside.
+        The distance distribution is also flattened if available.
+        The skymap is assumed to be in nested order.
 
         Parameters
         ----------
         nside_target : int
-            The target nside for the flattened skymap.
-
+            The target nside for the flat skymap.
         Returns
         -------
         dict
-            Dictionary with keys:
-                - "PROBDENSITY": 1D array
-                - "DISTMU": 1D array (if present)
-                - "DISTSIGMA": 1D array (if present)
-                - "DISTNORM": 1D array (if present)
+            A dictionary containing the flattened skymap and distance distribution.
+            The keys are:
+                - "PROBDENSITY": The flattened probability density map.
+                - "DISTMU": The flattened distance mean map (if available).
+                - "DISTSIGMA": The flattened distance sigma map (if available).
+                - "DISTNORM": The flattened distance normalization map (if available).
         """
 
+        # Method still buggy, the map is not flattened correctly.
+        # Some pixels disappear during the process.
+        # TODO: fix it
         skymap = self.get_skymap()
         uniq = skymap["UNIQ"]
         probs = skymap["PROBDENSITY"]
+
         has_dist = all(
             col in skymap.colnames for col in ["DISTMU", "DISTSIGMA", "DISTNORM"]
         )
-
         if has_dist:
             distmu = skymap["DISTMU"]
             distsigma = skymap["DISTSIGMA"]
             distnorm = skymap["DISTNORM"]
 
-        # Convert UNIQ to (level, ipix) and then to theta/phi
         orders, ipix = uniq_to_level_ipix(uniq)
-        nside_srcs = 2**orders
-        theta, phi = pix2ang(nside_srcs, ipix, nest=True)
+        nsides = level_to_nside(orders)
+        hpix_target = HEALPix(nside=nside_target, order="ring")
 
-        ipix_target = ang2pix(nside_target, theta, phi, nest=False)
         npix_target = nside2npix(nside_target)
-
         flat_map = zeros(npix_target)
         distmu_map = zeros(npix_target) if has_dist else None
         distsigma_map = zeros(npix_target) if has_dist else None
         distnorm_map = zeros(npix_target) if has_dist else None
 
-        for i, ipix_t in enumerate(ipix_target):
-            prob_val = probs[i].value
-            flat_map[ipix_t] += prob_val
+        for i in range(len(ipix)):
+            nside_src = nsides[i]
+            ipix_src = ipix[i]
+
+            theta, phi = pix2ang(nside_src, ipix_src, nest=True)
+            ra = degrees(phi) * u.deg
+            dec = (90 - degrees(theta)) * u.deg
+
+            pix_target = hpix_target.lonlat_to_healpix(ra, dec)
+
+            weight = probs[i].value
+            flat_map[pix_target] += weight
+
             if has_dist:
                 mu = distmu[i].value
                 sigma = distsigma[i].value
-                norm_ = distnorm[i].value
-                distmu_map[ipix_t] += mu * prob_val
-                distsigma_map[ipix_t] += sigma * prob_val
-                distnorm_map[ipix_t] += norm_ * prob_val
+                norm = distnorm[i].value
+                distmu_map[pix_target] += mu * weight
+                distsigma_map[pix_target] += sigma * weight
+                distnorm_map[pix_target] += norm * weight
 
         if has_dist:
             with errstate(invalid="ignore", divide="ignore"):
