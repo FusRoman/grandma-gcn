@@ -192,6 +192,7 @@ def build_gwemopt_message(
     obs_strategy: GW_alert.ObservationStrategy,
     celery_task_id: int,
     task_start_time: Time,
+    telescopes: list[str],
 ) -> Message:
     """
     Build a message for the new GWEMOPT processing task.
@@ -206,12 +207,9 @@ def build_gwemopt_message(
         The ID of the Celery task.
     task_start_time : Time
         The start time of the task.
-    slack_client : WebClient
-        The Slack client to use for sending the message.
-    channel : str
-        The Slack channel to send the message to.
-    logger : LoggerNewLine
-        The logger to use for logging messages.
+    telescopes : list[str]
+        List of telescopes involved in the gwemopt task.
+
 
     Returns
     -------
@@ -234,6 +232,11 @@ def build_gwemopt_message(
         )
         .add_elements(
             MarkdownText("*Strategy :*\n{}".format(obs_strategy.value)),
+        )
+        .add_elements(
+            MarkdownText(
+                "*Telescopes:*\n{}".format("\n".join(f"- {tel}" for tel in telescopes))
+            ),
         )
     )
 

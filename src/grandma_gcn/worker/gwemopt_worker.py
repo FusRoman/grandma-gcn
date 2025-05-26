@@ -13,7 +13,7 @@ from astropy.time import Time
 from grandma_gcn.worker.gwemopt_init import init_gwemopt
 
 
-def setup_task_logger(task_name: str) -> logging.Logger:
+def setup_task_logger(task_name: str, log_path: Path) -> logging.Logger:
     """
     Configure a logger to log into a separate file for each task.
 
@@ -21,6 +21,8 @@ def setup_task_logger(task_name: str) -> logging.Logger:
     ----------
     task_name : str
         The name of the task.
+    log_path : Path
+        The path where the log files will be stored.
 
     Returns
     -------
@@ -32,7 +34,7 @@ def setup_task_logger(task_name: str) -> logging.Logger:
     logger.setLevel(logging.INFO)
 
     # Create a file handler for the task
-    log_file = Path(f"task_logs/{task_name}_{id_task}.log")
+    log_file = log_path / f"{task_name}_{id_task}.log"
     log_file.parent.mkdir(
         parents=True, exist_ok=True
     )  # Create the logs directory if it doesn't exist
@@ -162,6 +164,7 @@ def gwemopt_task(
     slack_channel: str,
     path_notice: str,
     path_output: str,
+    path_log: str,
     BBH_threshold: float,
     Distance_threshold: float,
     ErrorRegion_threshold: float,
@@ -172,7 +175,7 @@ def gwemopt_task(
 
     Parameters
     ----------
-    telescopes : list[str]
+    telescopes : listpath_log[str]
         List of telescopes to use for the observation plan.
     nb_tiles : list[int]
         Number of tiles for each telescope.
@@ -206,7 +209,9 @@ def gwemopt_task(
             ErrorRegion_threshold=ErrorRegion_threshold,
         )  # Configure a logger specific to this task
 
-        logger = setup_task_logger("gwemopt_task_{}".format(gw_alert.event_id))
+        logger = setup_task_logger(
+            "gwemopt_task_{}".format(gw_alert.event_id), Path(path_log)
+        )
         logger.info("Starting gwemopt_task...")
 
         worker_slack_client = init_slackbot(logger)
@@ -220,6 +225,7 @@ def gwemopt_task(
             obs_strategy=obs_strategy,
             celery_task_id=task_id,
             task_start_time=start_task,
+            telescopes=telescopes,
         )
 
         tiles, _ = run_gwemopt(

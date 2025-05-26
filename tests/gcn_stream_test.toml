@@ -11,8 +11,9 @@ secret = "tata"
 topics = ["igwn.gwalert"]
 
 [PATH]
-log_path = "gcn_stream.log"
+gcn_stream_log_path = "gcn_stream.log"
 notice_path = "notices"
+celery_task_log_path = "gwemopt_task"
 
 [Threshold]
 BBH_proba = 0.5       # between 0 and 1

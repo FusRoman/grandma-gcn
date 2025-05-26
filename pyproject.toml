@@ -58,3 +58,11 @@ max-line-length = 88
 extend-ignore = ["E203", "E701", "E501"]
 exclude = [".git", "__pycache__", "build", "dist", "*.egg-info"]
 max-complexity = 10
+
+[tool.pytest.ini_options]
+markers = [
+    "e2e: run tests that need the app_test and the db_test (deselect with '-m \"not e2e\"')",
+]
+
+[tool.pdm.scripts]
+test = 'pytest -m "not e2e"'

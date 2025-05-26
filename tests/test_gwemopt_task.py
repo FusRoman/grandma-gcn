@@ -184,6 +184,7 @@ def test_gwemopt_task_celery(tmp_path, S241102_update):
                         "#test_channel",
                         str(notice_path),
                         str(path_output),
+                        str(tmp_path),
                         BBH_threshold,
                         Distance_threshold,
                         ErrorRegion_threshold,
