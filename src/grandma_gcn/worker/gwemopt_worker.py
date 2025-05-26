@@ -1,9 +1,12 @@
 from pathlib import Path
 import uuid
+from fink_utils.slack_bot.bot import init_slackbot
 
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
+from grandma_gcn.slackbot.gw_message import new_alert_on_slack, build_gwemopt_message
 from grandma_gcn.worker.celery_app import celery
 import logging
+from celery import current_task
 
 from astropy.time import Time
 
@@ -156,11 +159,13 @@ def gwemopt_task(
     telescopes: list[str],
     nb_tiles: list[int],
     nside: int,
+    slack_channel: str,
     path_notice: str,
     path_output: str,
     BBH_threshold: float,
     Distance_threshold: float,
     ErrorRegion_threshold: float,
+    obs_strategy: str,
 ) -> None:
     """
     Task to process the GCN notice.
@@ -169,6 +174,12 @@ def gwemopt_task(
     ----------
     telescopes : list[str]
         List of telescopes to use for the observation plan.
+    nb_tiles : list[int]
+        Number of tiles for each telescope.
+    nside : int
+        The nside parameter for the skymap.
+    slack_channel : str
+        The Slack channel to send the notification to.
     path_output : str
         Path to the output directory.
     path_notice : str
@@ -180,6 +191,9 @@ def gwemopt_task(
     ErrorRegion_threshold : float
         Threshold for size region cut.
     """
+    obs_strategy = GW_alert.ObservationStrategy.from_string(obs_strategy)
+    start_task = Time.now()
+    task_id = current_task.request.id
     path_notice = Path(path_notice)
     try:
         with open(path_notice, "rb") as fp:
@@ -195,13 +209,26 @@ def gwemopt_task(
         logger = setup_task_logger("gwemopt_task_{}".format(gw_alert.event_id))
         logger.info("Starting gwemopt_task...")
 
+        worker_slack_client = init_slackbot(logger)
+
+        new_alert_on_slack(
+            gw_alert,
+            build_gwemopt_message,
+            worker_slack_client,
+            channel=slack_channel,
+            logger=logger,
+            obs_strategy=obs_strategy,
+            celery_task_id=task_id,
+            task_start_time=start_task,
+        )
+
         tiles, _ = run_gwemopt(
             gw_alert,
             telescopes,
             nb_tiles,
             nside=nside,
             path_output=Path(path_output),
-            observation_strategy=GW_alert.ObservationStrategy.TILING,
+            observation_strategy=obs_strategy,
             logger=logger,
         )
 

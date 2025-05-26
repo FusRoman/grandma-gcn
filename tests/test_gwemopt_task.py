@@ -181,11 +181,13 @@ def test_gwemopt_task_celery(tmp_path, S241102_update):
                         telescopes,
                         nb_tiles,
                         nside,
+                        "#test_channel",
                         str(notice_path),
                         str(path_output),
                         BBH_threshold,
                         Distance_threshold,
                         ErrorRegion_threshold,
+                        GW_alert.ObservationStrategy.TILING.name,
                     ]
                 )
 
@@ -225,4 +227,4 @@ def test_process_alert_calls(mocker):
 
             assert mock_obs_plan.call_count == 2
 
-            mock_post_msg_on_slack.assert_called_once()
+            assert mock_post_msg_on_slack.call_count == 3

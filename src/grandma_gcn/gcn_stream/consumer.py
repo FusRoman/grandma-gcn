@@ -4,7 +4,7 @@ import logging
 import uuid
 
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
-from grandma_gcn.slackbot.gw_message import new_gwalert_on_slack
+from grandma_gcn.slackbot.gw_message import build_gwalert_msg, new_alert_on_slack
 from grandma_gcn.worker.gwemopt_worker import gwemopt_task
 
 
@@ -76,8 +76,9 @@ class Consumer(KafkaConsumer):
 
             path_notice = gw_alert.save_notice(self.gcn_stream.notice_path)
 
-            new_gwalert_on_slack(
+            new_alert_on_slack(
                 gw_alert,
+                build_gwalert_msg,
                 self.gcn_stream.slack_client,
                 channel=self.gw_alert_channel,
                 logger=self.logger,
@@ -95,11 +96,13 @@ class Consumer(KafkaConsumer):
                 self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_tiling"],
                 self.gcn_stream.gcn_config["GWEMOPT"]["tiling_nb_tiles"],
                 self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
+                self.gw_alert_channel,
                 str(path_notice),
                 str(path_output_tiling),
                 gw_alert.BBH_threshold,
                 gw_alert.Distance_threshold,
                 gw_alert.ErrorRegion_threshold,
+                GW_alert.ObservationStrategy.TILING.name,
             )
 
             self.logger.info(
@@ -110,11 +113,13 @@ class Consumer(KafkaConsumer):
                 self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_galaxy"],
                 self.gcn_stream.gcn_config["GWEMOPT"]["nb_galaxies"],
                 self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
+                self.gw_alert_channel,
                 str(path_notice),
                 str(path_output_galaxy),
                 gw_alert.BBH_threshold,
                 gw_alert.Distance_threshold,
                 gw_alert.ErrorRegion_threshold,
+                GW_alert.ObservationStrategy.GALAXYTARGETING.name,
             )
 
             self.logger.info(

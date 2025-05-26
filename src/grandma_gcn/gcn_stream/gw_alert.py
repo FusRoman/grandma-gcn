@@ -518,6 +518,23 @@ class GW_alert:
         TILING = "Tiling"
         GALAXYTARGETING = "Galaxy targeting"
 
+        @classmethod
+        def from_string(cls, strategy: str) -> Self:
+            """
+            Convert a string to an ObservationStrategy enum value
+
+            Parameters
+            ----------
+            strategy : str
+                the observation strategy string
+
+            Returns
+            -------
+            ObservationStrategy
+                the corresponding ObservationStrategy enum value
+            """
+            return cls[strategy] if strategy in cls.__members__ else None
+
     def run_observation_plan(
         self,
         telescope_list: list[str],

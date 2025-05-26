@@ -1,3 +1,4 @@
+from typing import Any, Callable
 from fink_utils.slack_bot.msg_builder import Message
 
 from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
@@ -186,11 +187,66 @@ def build_gwalert_msg(gw_alert: GW_alert) -> Message:
     return msg
 
 
-def new_gwalert_on_slack(
+def build_gwemopt_message(
     gw_alert: GW_alert,
+    obs_strategy: GW_alert.ObservationStrategy,
+    celery_task_id: int,
+    task_start_time: Time,
+) -> Message:
+    """
+    Build a message for the new GWEMOPT processing task.
+
+    Parameters
+    ----------
+    gw_alert : GW_alert
+        The GW alert object.
+    obs_strategy : GW_alert.ObservationStrategy
+        The observation strategy used for the processing.
+    celery_task_id : int
+        The ID of the Celery task.
+    task_start_time : Time
+        The start time of the task.
+    slack_client : WebClient
+        The Slack client to use for sending the message.
+    channel : str
+        The Slack channel to send the message to.
+    logger : LoggerNewLine
+        The logger to use for logging messages.
+
+    Returns
+    -------
+    Message
+        The message object containing the task information.
+    """
+
+    gw_alert.logger.info("Building message for new GWEMOPT processing task")
+
+    msg = Message()
+    msg.add_header("New GWEMOPT processing for {}".format(gw_alert.event_id))
+    msg.add_divider()
+    msg.add_elements(
+        BaseSection()
+        .add_elements(
+            MarkdownText("*Task ID:*\n{}".format(celery_task_id)),
+        )
+        .add_elements(
+            MarkdownText("Task started at: {}".format(task_start_time.iso)),
+        )
+        .add_elements(
+            MarkdownText("*Strategy :*\n{}".format(obs_strategy.value)),
+        )
+    )
+
+    return msg
+
+
+def new_alert_on_slack(
+    gw_alert: GW_alert,
+    build_msg_function: Callable[[GW_alert], Message],
     slack_client: WebClient,
     channel: str,
     logger: LoggerNewLine,
+    **kwargs: dict[str, Any],
 ) -> None:
     """
     Send the alert to slack
@@ -206,7 +262,7 @@ def new_gwalert_on_slack(
         the logger to use
     """
 
-    msg = build_gwalert_msg(gw_alert)
+    msg = build_msg_function(gw_alert, **kwargs)
 
     post_msg_on_slack(
         slack_client,
