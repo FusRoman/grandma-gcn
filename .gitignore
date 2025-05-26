@@ -170,3 +170,5 @@ gwemopt_output_2048_nside/
 multiorder_skymap.fits.gz
 test_gwemopt_local.py
 check_gwemopt_output.py
+.python-version
+test_post_msg_slack.py

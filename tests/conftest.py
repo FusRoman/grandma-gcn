@@ -7,8 +7,12 @@ from grandma_gcn.gcn_stream.gw_alert import GW_alert
 
 
 @pytest.fixture(autouse=True)
-def set_fake_slack_token(monkeypatch):
-    monkeypatch.setenv("FINK_SLACK_TOKEN", "fake-token-for-tests")
+def set_fake_slack_token(monkeypatch, request):
+    if "e2e" in request.keywords:
+        yield
+    else:
+        monkeypatch.setenv("FINK_SLACK_TOKEN", "fake-token-for-tests")
+        yield
 
 
 @pytest.fixture
