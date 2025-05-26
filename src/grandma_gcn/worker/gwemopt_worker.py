@@ -5,6 +5,8 @@ from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.worker.celery_app import celery
 import logging
 
+from astropy.time import Time
+
 from grandma_gcn.worker.gwemopt_init import init_gwemopt
 
 
@@ -110,6 +112,45 @@ def run_gwemopt(
     return obs_plan_results
 
 
+def table_to_custom_ascii(telescope, table):
+    """
+    Convert a table returned by gwemopt to a custom ASCII format for the grandma owncloud.
+
+    Parameters
+    ----------
+    telescope : str
+        The name of the telescope.
+    table : Table
+        The table containing the observation plan data.
+
+    Returns
+    -------
+    str
+        The formatted string in the custom ASCII format.
+    """
+    lines = [f"# {telescope}"]
+    lines.append("rank_id       tile_id       RA       DEC       Prob   Timeobs")
+
+    for row in table:
+        rank_id = row["rank_id"]
+        tile_id = row["tile_id"]
+        ra = row["RA"] * 180 / 3.141592653589793  # rad → deg
+        dec = row["DEC"] * 180 / 3.141592653589793  # rad → deg
+        prob = row["Prob"]
+        timeobs = Time(row["Timeobs"]).iso  # format ISO, eg. 2025-05-27 08:49:22.577
+
+        # truncate ms to 3 digits
+        timeobs = timeobs[:23]
+
+        # Format the line with fixed spacing
+        line = (
+            f"{rank_id:<4} {tile_id:<8} {ra:<10.4f} {dec:<10.4f} {prob:<8.4f} {timeobs}"
+        )
+        lines.append(line)
+
+    return "\n".join(lines)
+
+
 @celery.task(name="gwemopt_task")
 def gwemopt_task(
     telescopes: list[str],
@@ -154,7 +195,7 @@ def gwemopt_task(
         logger = setup_task_logger("gwemopt_task_{}".format(gw_alert.event_id))
         logger.info("Starting gwemopt_task...")
 
-        _, _ = run_gwemopt(
+        tiles, _ = run_gwemopt(
             gw_alert,
             telescopes,
             nb_tiles,
@@ -163,6 +204,8 @@ def gwemopt_task(
             observation_strategy=GW_alert.ObservationStrategy.TILING,
             logger=logger,
         )
+
+        _ = {k: table_to_custom_ascii(k, v) for k, v in tiles.items()}
 
         logger.info("GW_alert successfully processed.")
     except Exception as e:
