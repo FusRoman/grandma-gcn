@@ -204,13 +204,13 @@ def test_flatten(S241102_update: GW_alert):
     not_inf_dist = logical_not(isinf(flat_map["DISTMU"]))
 
     assert flat_map["PROBDENSITY"].shape == (49152,)
-    assert flat_map["PROBDENSITY"].sum() == pytest.approx(1693447.4464275949, rel=1e-2)
+    assert flat_map["PROBDENSITY"].sum() == pytest.approx(0.9999999999999999, rel=1e-2)
 
     assert flat_map["DISTMU"].shape == (49152,)
     assert mean(flat_map["DISTMU"], where=not_inf_dist) == pytest.approx(
-        3.083552984013613, rel=1e-2
+        117.067497400103, rel=1e-2
     )
     assert flat_map["DISTSIGMA"].shape == (49152,)
-    assert flat_map["DISTSIGMA"].sum() == pytest.approx(28274.523094610395, rel=1e-2)
+    assert flat_map["DISTSIGMA"].sum() == pytest.approx(75590.06787484365, rel=1e-2)
     assert flat_map["DISTNORM"].shape == (49152,)
     assert flat_map["DISTNORM"].sum() == pytest.approx(2453462276.0800576, rel=1e-2)

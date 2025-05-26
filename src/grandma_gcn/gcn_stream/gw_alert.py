@@ -7,32 +7,16 @@ from pathlib import Path
 from typing import Any, Self
 import uuid
 
+from astropy_healpix import nside_to_level
 from astropy.time import Time
 
 from astropy.table import QTable, Table
 import astropy.units as astro_units
-from numpy import (
-    array,
-    cumsum,
-    float64,
-    inf,
-    isinf,
-    logical_not,
-    mean,
-    ndarray,
-    zeros,
-    where,
-    errstate,
-    degrees,
-)
-
-from astropy_healpix import uniq_to_level_ipix
-from healpy import nside2npix, pix2ang
+from ligo.skymap.bayestar import rasterize
+from numpy import array, cumsum, float64, inf, isinf, logical_not, mean, ndarray
 
 from gwemopt.ToO_manager import Observation_plan_multiple
-
-from astropy_healpix import HEALPix, level_to_nside
-import astropy.units as u
+import healpy as hp
 
 
 def bytes_to_dict(notice: bytes) -> dict:
@@ -505,10 +489,8 @@ class GW_alert:
     def flatten_skymap(self, nside_target: int) -> dict:
         """
         Convert a multi-resolution skymap to a flat skymap with a given nside.
-        The skymap is flattened by summing the probabilities of the pixels
-        that fall into the same pixel of the target nside.
-        The distance distribution is also flattened if available.
-        The skymap is assumed to be in nested order.
+        Use the `rasterize` function from `ligo.skymap.bayestar` to flatten the skymap.
+        The output skymap is in ring ordering.
 
         Parameters
         ----------
@@ -524,69 +506,13 @@ class GW_alert:
                 - "DISTSIGMA": The flattened distance sigma map (if available).
                 - "DISTNORM": The flattened distance normalization map (if available).
         """
-
-        # Method still buggy, the map is not flattened correctly.
-        # Some pixels disappear during the process.
-        # TODO: fix it
         skymap = self.get_skymap()
-        uniq = skymap["UNIQ"]
-        probs = skymap["PROBDENSITY"]
-
-        has_dist = all(
-            col in skymap.colnames for col in ["DISTMU", "DISTSIGMA", "DISTNORM"]
-        )
-        if has_dist:
-            distmu = skymap["DISTMU"]
-            distsigma = skymap["DISTSIGMA"]
-            distnorm = skymap["DISTNORM"]
-
-        orders, ipix = uniq_to_level_ipix(uniq)
-        nsides = level_to_nside(orders)
-        hpix_target = HEALPix(nside=nside_target, order="ring")
-
-        npix_target = nside2npix(nside_target)
-        flat_map = zeros(npix_target)
-        distmu_map = zeros(npix_target) if has_dist else None
-        distsigma_map = zeros(npix_target) if has_dist else None
-        distnorm_map = zeros(npix_target) if has_dist else None
-
-        for i in range(len(ipix)):
-            nside_src = nsides[i]
-            ipix_src = ipix[i]
-
-            theta, phi = pix2ang(nside_src, ipix_src, nest=True)
-            ra = degrees(phi) * u.deg
-            dec = (90 - degrees(theta)) * u.deg
-
-            pix_target = hpix_target.lonlat_to_healpix(ra, dec)
-
-            weight = probs[i].value
-            flat_map[pix_target] += weight
-
-            if has_dist:
-                mu = distmu[i].value
-                sigma = distsigma[i].value
-                norm = distnorm[i].value
-                distmu_map[pix_target] += mu * weight
-                distsigma_map[pix_target] += sigma * weight
-                distnorm_map[pix_target] += norm * weight
-
-        if has_dist:
-            with errstate(invalid="ignore", divide="ignore"):
-                distmu_map = where(flat_map > 0, distmu_map / flat_map, 0)
-                distsigma_map = where(flat_map > 0, distsigma_map / flat_map, 0)
-                distnorm_map = where(flat_map > 0, distnorm_map / flat_map, 0)
-
-        result = {"PROBDENSITY": flat_map}
-        if has_dist:
-            result.update(
-                {
-                    "DISTMU": distmu_map,
-                    "DISTSIGMA": distsigma_map,
-                    "DISTNORM": distnorm_map,
-                }
-            )
-        return result
+        order = nside_to_level(nside_target)
+        flat_map = rasterize(skymap, order)
+        flat_map.rename_column("PROB", "PROBDENSITY")
+        for cols in flat_map.colnames:
+            flat_map[cols] = hp.reorder(flat_map[cols], n2r=True)
+        return flat_map
 
     class ObservationStrategy(Enum):
         TILING = "Tiling"

@@ -15,6 +15,7 @@ dependencies = [
     "celery[redis]>=5.5.2",
     "dotenv>=0.9.9",
     "gwemopt @ git+https://github.com/FusRoman/old_gwemopt@8632efe7baf9212e9d490dc0bb4fccee388dc83e",
+    "ligo-skymap>=2.4.0",
 ]
 requires-python = ">=3.12"
 readme = "README.md"
