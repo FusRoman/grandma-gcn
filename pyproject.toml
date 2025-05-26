@@ -2,9 +2,7 @@
 name = "grandma-gcn"
 version = "0.1.0"
 description = "Default template for PDM package"
-authors = [
-    {name = "Roman", email = "roman.lemontagner@gmail.com"},
-]
+authors = [{ name = "Roman", email = "roman.lemontagner@gmail.com" }]
 dependencies = [
     "gcn-kafka>=0.3.3",
     "tomli>=2.0.2",
@@ -14,6 +12,10 @@ dependencies = [
     "typing-extensions>=4.13.2",
     "astropy>=7.0.2",
     "astropy-healpix>=1.1.2",
+    "celery[redis]>=5.5.2",
+    "dotenv>=0.9.9",
+    "gwemopt @ git+https://github.com/FusRoman/old_gwemopt@073ec063968b0193e1fe9b2a17e2a85ec11e07b9",
+    "ligo-skymap>=2.4.0",
 ]
 requires-python = ">=3.12"
 readme = "README.md"
@@ -28,9 +30,31 @@ build-backend = "pdm.backend"
 distribution = true
 
 [project.optional-dependencies]
-test = [
-    "pytest>=8.3.3",
-    "pytest-mock>=3.14.0",
-]
+test = ["pytest>=8.3.3", "pytest-mock>=3.14.0"]
 
 lint = ["black>=24.10.0", "pre-commit>=4.0.1", "pylint>=3.3.2"]
+
+[tool.black]
+target-version = ['py312']
+include = '\.pyi?$'
+
+[tool.pylint]
+disable = "all"
+enable = [
+    "redefined-builtin",
+    "unreachable",
+    "duplicate-key",
+    "unnecessary-semicolon",
+    "global-variable-not-assigned",
+    "unused-variable",
+    "binary-op-exception",
+    "bad-format-string",
+    "anomalous-backslash-in-string",
+    "bad-open-mode",
+]
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "E701", "E501"]
+exclude = [".git", "__pycache__", "build", "dist", "*.egg-info"]
+max-complexity = 10

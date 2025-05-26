@@ -4,7 +4,7 @@ import pytest
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 
 from astropy.time import Time
-from numpy import inf
+from numpy import inf, logical_not, isinf, mean
 
 
 @pytest.fixture
@@ -15,7 +15,6 @@ def path_tests():
 
 def open_notice_file(path_test, name_file):
     path_notice = Path(path_test, "notice_examples", name_file)
-    print(f"Opening {path_notice}")
     with open(path_notice, "rb") as fp:
         return fp.read()
 
@@ -68,10 +67,10 @@ def test_gw_alert_unsignificant(gw_alert_unsignificant: GW_alert):
     )
     assert gw_alert_unsignificant.far == 1.4653e-05
     assert gw_alert_unsignificant.has_NS == 0.0
-    assert gw_alert_unsignificant.is_significant == False
+    assert not gw_alert_unsignificant.is_significant
 
     assert gw_alert_unsignificant.event_class == GW_alert.CBC_proba.Terrestrial
-    assert gw_alert_unsignificant.is_real_observation() == False
+    assert not gw_alert_unsignificant.is_real_observation()
     assert list(gw_alert_unsignificant.get_skymap().columns) == ["UNIQ", "PROBDENSITY"]
 
     _, size, mean_dist, mean_sigma = gw_alert_unsignificant.get_error_region(0.9)
@@ -79,7 +78,10 @@ def test_gw_alert_unsignificant(gw_alert_unsignificant: GW_alert):
     assert mean_dist == inf
     assert mean_sigma == pytest.approx(1.0)
 
-    assert gw_alert_unsignificant.gracedb_url == "https://gracedb.ligo.org/superevents/S241004ap/view/"
+    assert (
+        gw_alert_unsignificant.gracedb_url
+        == "https://gracedb.ligo.org/superevents/S241004ap/view/"
+    )
 
 
 def test_gw_alert_significant(gw_alert_significant: GW_alert):
@@ -90,10 +92,10 @@ def test_gw_alert_significant(gw_alert_significant: GW_alert):
     )
     assert gw_alert_significant.far == 1.4653e-05
     assert gw_alert_significant.has_NS == 0.0
-    assert gw_alert_significant.is_significant == True
+    assert gw_alert_significant.is_significant
 
     assert gw_alert_significant.event_class == GW_alert.CBC_proba.Terrestrial
-    assert gw_alert_significant.is_real_observation() == True
+    assert gw_alert_significant.is_real_observation()
 
     _, size, mean_dist, mean_sigma = gw_alert_significant.get_error_region(0.9)
     assert size == pytest.approx(3613.1591426340738)
@@ -112,10 +114,10 @@ def test_S241102_initial(S241102_initial: GW_alert):
     assert S241102_initial.event_time == Time("2024-11-02T12:40:58.788Z", format="isot")
     assert S241102_initial.far == 1.14177774199959e-41
     assert S241102_initial.has_NS == 0.00013001687588556378
-    assert S241102_initial.is_significant == True
+    assert S241102_initial.is_significant
 
     assert S241102_initial.event_class == GW_alert.CBC_proba.BBH
-    assert S241102_initial.is_real_observation() == True
+    assert S241102_initial.is_real_observation()
 
     skymap, size, mean_dist, mean_sigma = S241102_initial.get_error_region(0.9)
     assert list(skymap.columns) == [
@@ -146,10 +148,10 @@ def test_S241102_preliminary(S241102_preliminary: GW_alert):
     )
     assert S241102_preliminary.far == 1.79286773809082e-11
     assert S241102_preliminary.has_NS == 0.0877092915626526
-    assert S241102_preliminary.is_significant == True
+    assert S241102_preliminary.is_significant
 
     assert S241102_preliminary.event_class == GW_alert.CBC_proba.BBH
-    assert S241102_preliminary.is_real_observation() == True
+    assert S241102_preliminary.is_real_observation()
 
 
 def test_S241102_update(S241102_update: GW_alert):
@@ -159,10 +161,10 @@ def test_S241102_update(S241102_update: GW_alert):
     assert S241102_update.far == 1.14177774199959e-41
     assert S241102_update.has_NS == 0.0
     assert S241102_update.has_remnant == 0.0
-    assert S241102_update.is_significant == True
+    assert S241102_update.is_significant
 
     assert S241102_update.event_class == GW_alert.CBC_proba.BBH
-    assert S241102_update.is_real_observation() == True
+    assert S241102_update.is_real_observation()
     assert list(S241102_update.get_skymap().columns) == [
         "UNIQ",
         "PROBDENSITY",
@@ -193,3 +195,22 @@ def test_S241102_update(S241102_update: GW_alert):
         GW_alert.Instrument.L1,
         GW_alert.Instrument.V1,
     ]
+
+
+def test_flatten(S241102_update: GW_alert):
+
+    flat_map = S241102_update.flatten_skymap(64)
+
+    not_inf_dist = logical_not(isinf(flat_map["DISTMU"]))
+
+    assert flat_map["PROBDENSITY"].shape == (49152,)
+    assert flat_map["PROBDENSITY"].sum() == pytest.approx(0.9999999999999999, rel=1e-2)
+
+    assert flat_map["DISTMU"].shape == (49152,)
+    assert mean(flat_map["DISTMU"], where=not_inf_dist) == pytest.approx(
+        117.067497400103, rel=1e-2
+    )
+    assert flat_map["DISTSIGMA"].shape == (49152,)
+    assert flat_map["DISTSIGMA"].sum() == pytest.approx(75590.06787484365, rel=1e-2)
+    assert flat_map["DISTNORM"].shape == (49152,)
+    assert flat_map["DISTNORM"].sum() == pytest.approx(2453462276.0800576, rel=1e-2)

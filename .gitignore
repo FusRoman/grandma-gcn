@@ -162,3 +162,10 @@ cython_debug/
 #.idea/
 
 gcn_stream_config.toml
+slack.secret
+bayestar_moc.fits.gz
+flat_skymap.fits.gz
+gwemopt_output/
+gwemopt_output_2048_nside/
+multiorder_skymap.fits.gz
+test_gwemopt_local.py

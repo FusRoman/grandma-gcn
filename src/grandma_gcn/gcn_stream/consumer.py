@@ -1,15 +1,17 @@
+from pathlib import Path
 from gcn_kafka import Consumer as KafkaConsumer
 import logging
+import uuid
 
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
-from grandma_gcn.slackbot.gw_message import send_alert_to_slack
-
-logger = logging.getLogger(__name__)
+from grandma_gcn.slackbot.gw_message import new_gwalert_on_slack
+from grandma_gcn.worker.gwemopt_worker import gwemopt_task
 
 
 class Consumer(KafkaConsumer):
     def __init__(self, *, gcn_stream) -> None:
-        gcn_stream.logger.info("Starting GCN stream consumer")
+        self.logger = logging.getLogger("gcn_stream.consumer")
+        self.logger.info("Starting GCN stream consumer")
 
         super().__init__(
             config=gcn_stream.gcn_config["KAFKA_CONFIG"],
@@ -32,8 +34,6 @@ class Consumer(KafkaConsumer):
         else:
             self.subscribe(topics)
 
-        self.logger = logging.getLogger("gcn_stream.consumer")
-
     @staticmethod
     def assign_partition(consumer: "Consumer", partitions) -> None:
         """
@@ -52,17 +52,13 @@ class Consumer(KafkaConsumer):
             p.offset = 0
         consumer.assign(partitions)
 
-    def process_alert(self, notice: bytes) -> str:
+    def process_alert(self, notice: bytes) -> None:
         """
         Process the alert and return a message.
 
         Parameters
         -----------
             notice (bytes): The alert notice in bytes.
-
-        Returns
-        -------
-            str: The processed message.
         """
         self.logger.info("Processing alert")
 
@@ -75,14 +71,54 @@ class Consumer(KafkaConsumer):
             ],
         )
         score, _, _ = gw_alert.gw_score()
-        print(score)
         if score > 1:
             self.logger.info("Significant alert detected")
-            send_alert_to_slack(
+
+            path_notice = gw_alert.save_notice(self.gcn_stream.notice_path)
+
+            new_gwalert_on_slack(
                 gw_alert,
                 self.gcn_stream.slack_client,
                 channel=self.gw_alert_channel,
                 logger=self.logger,
+            )
+
+            path_output_tiling = Path(
+                f"{gw_alert.event_id}_gwemopt_tiling_{uuid.uuid4().hex}"
+            )
+            path_output_galaxy = Path(
+                f"{gw_alert.event_id}_gwemopt_galaxy_{uuid.uuid4().hex}"
+            )
+
+            self.logger.info("Sending gwemopt task to celery worker")
+            task_tiling = gwemopt_task.delay(
+                self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_tiling"],
+                self.gcn_stream.gcn_config["GWEMOPT"]["tiling_nb_tiles"],
+                self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
+                str(path_notice),
+                str(path_output_tiling),
+                gw_alert.BBH_threshold,
+                gw_alert.Distance_threshold,
+                gw_alert.ErrorRegion_threshold,
+            )
+
+            self.logger.info(
+                f"Gwemopt launched for tiling telescopes with ID: {task_tiling.id}"
+            )
+
+            task_galaxy = gwemopt_task.delay(
+                self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_galaxy"],
+                self.gcn_stream.gcn_config["GWEMOPT"]["nb_galaxies"],
+                self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
+                str(path_notice),
+                str(path_output_galaxy),
+                gw_alert.BBH_threshold,
+                gw_alert.Distance_threshold,
+                gw_alert.ErrorRegion_threshold,
+            )
+
+            self.logger.info(
+                f"Gwemopt launched for galaxy targeting telescopes with ID: {task_galaxy.id}"
             )
 
     def start_poll_loop(
@@ -100,15 +136,15 @@ class Consumer(KafkaConsumer):
             message = self.poll(timeout=interval_between_polls)
             if message is not None:
 
-                logger.info("-- A new notice has arrived --")
-                logger.info(f"topic: {message.topic()}")
-                logger.info(f"current offset: {message.offset()}")
+                self.logger.info("-- A new notice has arrived --")
+                self.logger.info(f"topic: {message.topic()}")
+                self.logger.info(f"current offset: {message.offset()}")
                 if message.error():
-                    logger.error(message.error())
+                    self.logger.error(message.error())
                     continue
                 try:
                     self.process_alert(notice=message.value())
                     self.commit(message)
                 except Exception as err:
-                    logger.error(err)
+                    self.logger.error(err)
                     continue

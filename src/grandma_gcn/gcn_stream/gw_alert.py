@@ -3,17 +3,20 @@ from enum import Enum
 import io
 import json
 import logging
+from pathlib import Path
 from typing import Any, Self
+import uuid
 
+from astropy_healpix import nside_to_level
 from astropy.time import Time
 
-from astropy.table import QTable
+from astropy.table import QTable, Table
 import astropy.units as astro_units
+from ligo.skymap.bayestar import rasterize
 from numpy import array, cumsum, float64, inf, isinf, logical_not, mean, ndarray
 
-from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
-
-from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
+from gwemopt.ToO_manager import Observation_plan_multiple
+import healpy as hp
 
 
 def bytes_to_dict(notice: bytes) -> dict:
@@ -34,6 +37,22 @@ def bytes_to_dict(notice: bytes) -> dict:
     return json.load(io.BytesIO(notice))
 
 
+def save_as_json(dict_notice: dict, save_path: Path) -> None:
+    """
+    Save a notice as a json file.
+    The notice have to be a python dictionary, json compatible.
+
+    Parameters
+    ----------
+    dict_notice : dict
+        The gcn notice
+    save_path : Path
+        The path where to save the dictionary
+    """
+    with open(save_path, "w") as fp:
+        json.dump(dict_notice, fp)
+
+
 class GW_alert:
     def __init__(
         self,
@@ -48,7 +67,7 @@ class GW_alert:
         self.Distance_threshold = Distance_threshold
         self.ErrorRegion_threshold = ErrorRegion_threshold
 
-        self.logger = logging.getLogger("gcn_stream.gw_alert")
+        self.logger = logging.getLogger("gcn_stream.gw_alert_{}".format(self.event_id))
 
     @property
     def event(self) -> dict[str, Any]:
@@ -389,6 +408,9 @@ class GW_alert:
 
         _, size_region, mean_dist, _ = self.get_error_region(0.9)
 
+        if not self.is_real_observation():
+            return score, msg, conclusion
+
         match self.event_type:
             case self.EventType.RETRACTION:
                 msg = "RETRACTION, it is not an Astrophysical event, \n"
@@ -440,3 +462,100 @@ class GW_alert:
                         conclusion = self.GRANDMA_Action.NO_GRANDMA
 
         return score, msg, conclusion
+
+    def save_notice(self, start_path: Path) -> Path:
+        """
+        Save a notice as a json file.The filename will be an hexadecimal random value.
+
+        Parameters
+        ----------
+        start_path : Path
+            path where the notice will be saved
+        logger : LoggerNewLine, optional
+            the logger object, by default None
+
+        Returns
+        -------
+        str
+            the path where the notice has been saved
+        """
+        notice_id = uuid.uuid4().hex
+        path_to_save = Path(start_path, f"{notice_id}.json")
+        save_as_json(self.gw_dict, path_to_save)
+
+        self.logger.info(f"New GW notice saved with id={notice_id}")
+        return path_to_save
+
+    def flatten_skymap(self, nside_target: int) -> dict:
+        """
+        Convert a multi-resolution skymap to a flat skymap with a given nside.
+        Use the `rasterize` function from `ligo.skymap.bayestar` to flatten the skymap.
+        The output skymap is in ring ordering.
+
+        Parameters
+        ----------
+        nside_target : int
+            The target nside for the flat skymap.
+        Returns
+        -------
+        dict
+            A dictionary containing the flattened skymap and distance distribution.
+            The keys are:
+                - "PROBDENSITY": The flattened probability density map.
+                - "DISTMU": The flattened distance mean map (if available).
+                - "DISTSIGMA": The flattened distance sigma map (if available).
+                - "DISTNORM": The flattened distance normalization map (if available).
+        """
+        skymap = self.get_skymap()
+        order = nside_to_level(nside_target)
+        flat_map = rasterize(skymap, order)
+        flat_map.rename_column("PROB", "PROBDENSITY")
+        for cols in flat_map.colnames:
+            flat_map[cols] = hp.reorder(flat_map[cols], n2r=True)
+        return flat_map
+
+    class ObservationStrategy(Enum):
+        TILING = "Tiling"
+        GALAXYTARGETING = "Galaxy targeting"
+
+    def run_observation_plan(
+        self,
+        telescope_list: list[str],
+        params: dict[str, Any],
+        map_struct: dict[str, Any],
+        path_output: str,
+        observation_strategy: ObservationStrategy,
+    ) -> tuple[Table, Any]:
+        """
+        Launch the gwemopt process with the given parameters and skymap structure.
+        Becareful, the input map ordering have to be in nested order.
+
+        Parameters
+        ----------
+        telescope_list : list[str]
+            The list of telescopes to use for the observation.
+        params : dict[str, Any]
+            The parameters for the gwemopt process.
+        map_struct : dict[str, Any]
+            The skymap structure.
+        path_output : str
+            The path where the output will be saved.
+        observation_strategy : ObservationStrategy
+            The observation strategy to use (TILING or GALAXYTARGETING).
+
+        Returns
+        -------
+        tuple[Table, Any]
+            - tiles_tables: the table of tiles generated by gwemopt
+            - galaxies_table: the table of galaxies generated by gwemopt
+        """
+
+        return Observation_plan_multiple(
+            telescope_list,
+            self.get_event_time(),
+            self.event_id,
+            params,
+            map_struct,
+            observation_strategy.value,
+            path_output,
+        )

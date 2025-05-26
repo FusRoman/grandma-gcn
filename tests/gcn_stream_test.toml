@@ -12,6 +12,7 @@ topics = ["igwn.gwalert"]
 
 [PATH]
 log_path = "gcn_stream.log"
+notice_path = "notices"
 
 [Threshold]
 BBH_proba = 0.5       # between 0 and 1
@@ -20,3 +21,10 @@ Size_region_cut = 500 # in deg²
 
 [Slack]
 gw_alert_channel = "#test_gwalerts"
+
+[GWEMOPT]
+telescopes_tiling = ["TCH","TRE","TCA","FZU-CTA-N","FZU-Auger"]
+tiling_nb_tiles = [10,10,10,15,15]
+telescopes_galaxy = ["KAO"]
+nb_galaxies = [10]
+nside_flat = 64

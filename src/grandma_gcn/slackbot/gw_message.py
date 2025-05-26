@@ -1,7 +1,6 @@
-from pathlib import Path
 from fink_utils.slack_bot.msg_builder import Message
 
-from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine, init_logging
+from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 
 from grandma_gcn.slackbot.element_extension import (
@@ -15,7 +14,6 @@ from grandma_gcn.slackbot.element_extension import (
 
 from fink_utils.slack_bot.rich_text.rich_text_element import RichTextStyle
 from fink_utils.slack_bot.rich_text.rich_section import SectionElement
-from fink_utils.slack_bot.rich_text.rich_list import RichList
 
 from astropy.time import Time
 
@@ -188,7 +186,7 @@ def build_gwalert_msg(gw_alert: GW_alert) -> Message:
     return msg
 
 
-def send_alert_to_slack(
+def new_gwalert_on_slack(
     gw_alert: GW_alert,
     slack_client: WebClient,
     channel: str,
@@ -215,7 +213,7 @@ def send_alert_to_slack(
         channel,
         [msg],
         logger=logger,
-        verbose=True,
+        verbose=False,
     )
 
     logger.info("Alert sent to Slack channel: {}".format(channel))
