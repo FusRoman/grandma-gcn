@@ -172,3 +172,4 @@ test_gwemopt_local.py
 check_gwemopt_output.py
 .python-version
 test_post_msg_slack.py
+init.sh

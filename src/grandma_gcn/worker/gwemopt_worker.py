@@ -238,6 +238,8 @@ def gwemopt_task(
             logger=logger,
         )
 
+        print(f"Tiles: {tiles}")
+
         _ = {k: table_to_custom_ascii(k, v) for k, v in tiles.items()}
 
         logger.info("GW_alert successfully processed.")

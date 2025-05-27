@@ -5,7 +5,7 @@
 groups = ["default", "lint", "test"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:11638aa90de92869154102c7ef5d553f78a1addf143b1ceb11187869466de013"
+content_hash = "sha256:bd78f2851262b3ccd4e28434c52dc0f0f1c1b28913a501a2dc2152285ee2a209"
 
 [[metadata.targets]]
 requires_python = ">=3.12"
@@ -803,8 +803,8 @@ name = "gwemopt"
 version = "0.1.0"
 requires_python = ">=3.12"
 git = "https://github.com/FusRoman/old_gwemopt"
-ref = "073ec063968b0193e1fe9b2a17e2a85ec11e07b9"
-revision = "073ec063968b0193e1fe9b2a17e2a85ec11e07b9"
+ref = "a59f99a0fb9033a640ab2c0a99245142a0e825bd"
+revision = "a59f99a0fb9033a640ab2c0a99245142a0e825bd"
 summary = "Default template for PDM package"
 groups = ["default"]
 dependencies = [
@@ -1824,7 +1824,7 @@ files = [
 
 [[package]]
 name = "pytest-mock"
-version = "3.14.0"
+version = "3.14.1"
 requires_python = ">=3.8"
 summary = "Thin-wrapper around the mock package for easier use with pytest"
 groups = ["test"]
@@ -1832,8 +1832,8 @@ dependencies = [
     "pytest>=6.2.5",
 ]
 files = [
-    {file = "pytest-mock-3.14.0.tar.gz", hash = "sha256:2719255a1efeceadbc056d6bf3df3d1c5015530fb40cf347c0f9afac88410bd0"},
-    {file = "pytest_mock-3.14.0-py3-none-any.whl", hash = "sha256:0b72c38033392a5f4621342fe11e9219ac11ec9d375f8e2a0c164539e0d70f6f"},
+    {file = "pytest_mock-3.14.1-py3-none-any.whl", hash = "sha256:178aefcd11307d874b4cd3100344e7e2d888d9791a6a1d9bfe90fbc1b74fd1d0"},
+    {file = "pytest_mock-3.14.1.tar.gz", hash = "sha256:159e9edac4c451ce77a5cdb9fc5d1100708d2dd4ba3c3df572f14097351af80e"},
 ]
 
 [[package]]
