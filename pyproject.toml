@@ -14,7 +14,7 @@ dependencies = [
     "astropy-healpix>=1.1.2",
     "celery[redis]>=5.5.2",
     "dotenv>=0.9.9",
-    "gwemopt @ git+https://github.com/FusRoman/old_gwemopt@a59f99a0fb9033a640ab2c0a99245142a0e825bd",
+    "gwemopt @ git+https://github.com/FusRoman/old_gwemopt@v1.0.0",
     "ligo-skymap>=2.4.0",
 ]
 requires-python = ">=3.12"
