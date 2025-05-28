@@ -232,12 +232,6 @@ def test_process_alert_calls(mocker):
         )
         mock_gcn_stream.notice_path = temp_path
 
-        # mock_slack_client = MagicMock()
-        # mock_slack_client.files_upload_v2.return_value = {
-        #     "file": {"permalink_public": "fake_url"}
-        # }
-        # mock_gcn_stream.slack_client = mock_slack_client
-
         notice = open_notice_file(Path("tests"), "S241102br-update.json")
 
         mock_post_msg_on_slack = mocker.patch(
