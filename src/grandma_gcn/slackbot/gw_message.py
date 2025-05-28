@@ -221,22 +221,28 @@ def build_gwemopt_message(
     gw_alert.logger.info("Building message for new GWEMOPT processing task")
 
     msg = Message()
-    msg.add_header("New GWEMOPT processing for {}".format(gw_alert.event_id))
+    msg.add_header("🧠 New GWEMOPT processing for {}".format(gw_alert.event_id))
     msg.add_divider()
     msg.add_elements(
         BaseSection()
         .add_elements(
-            MarkdownText("*Task ID:*\n{}".format(celery_task_id)),
+            MarkdownText("🆔 *Task ID:*\n{}".format(celery_task_id)),
         )
         .add_elements(
-            MarkdownText("Task started at: {}".format(task_start_time.iso)),
-        )
-        .add_elements(
-            MarkdownText("*Strategy :*\n{}".format(obs_strategy.value)),
+            MarkdownText("⏱️ Task started at: {}".format(task_start_time.iso)),
         )
         .add_elements(
             MarkdownText(
-                "*Telescopes:*\n{}".format("\n".join(f"- {tel}" for tel in telescopes))
+                "*Strategy :*\n{} {}".format(
+                    obs_strategy.to_emoji(), obs_strategy.value
+                )
+            ),
+        )
+        .add_elements(
+            MarkdownText(
+                "🔭 *Telescopes:*\n{}".format(
+                    "\n".join(f"- {tel}" for tel in telescopes)
+                )
             ),
         )
     )
@@ -311,7 +317,7 @@ def build_gwemopt_results_message(
             MarkdownText("*Task ID:*\n{}".format(celery_task_id)),
         )
         .add_elements(
-            MarkdownText("Total execution time: {}".format(execution_time)),
+            MarkdownText("Total execution time: {:.3f}".format(execution_time)),
         )
         .add_elements(
             MarkdownText(

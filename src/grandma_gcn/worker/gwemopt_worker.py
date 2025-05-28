@@ -324,7 +324,7 @@ def gwemopt_task(
                     logger=logger,
                     celery_task_id=task_id,
                     execution_time=(Time.now() - start_task).sec,
-                    obs_strategy=GW_alert.ObservationStrategy.GALAXYTARGETING,
+                    obs_strategy=obs_strategy,
                     telescopes=telescopes,
                     slack_plot_permalink=permalink,
                 )
