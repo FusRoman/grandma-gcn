@@ -206,6 +206,7 @@ def test_gwemopt_task_celery(tmp_path, S241102_update):
                         nb_tiles,
                         nside,
                         "#test_channel",
+                        "CHANNELID",
                         str(notice_path),
                         str(path_output),
                         str(tmp_path),
@@ -220,20 +221,22 @@ def test_gwemopt_task_celery(tmp_path, S241102_update):
 
 
 def test_process_alert_calls(mocker):
-    """
-    Teste que process_alert crée bien un GW_alert et retourne un message selon le score.
-    """
     from grandma_gcn.gcn_stream.consumer import Consumer
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Mock gcn_stream et sa config
         mock_gcn_stream = MagicMock()
         mock_gcn_stream.gcn_config = load_gcn_config(
             Path("tests", "gcn_stream_test.toml"), logger=logging.getLogger()
         )
         mock_gcn_stream.notice_path = temp_path
+
+        # mock_slack_client = MagicMock()
+        # mock_slack_client.files_upload_v2.return_value = {
+        #     "file": {"permalink_public": "fake_url"}
+        # }
+        # mock_gcn_stream.slack_client = mock_slack_client
 
         notice = open_notice_file(Path("tests"), "S241102br-update.json")
 
@@ -241,15 +244,29 @@ def test_process_alert_calls(mocker):
             "grandma_gcn.slackbot.gw_message.post_msg_on_slack"
         )
 
-        # Patch Observation_plan_multiple pour éviter le calcul lourd
         with patch(
             "grandma_gcn.gcn_stream.gw_alert.Observation_plan_multiple"
         ) as mock_obs_plan:
-            mock_obs_plan.return_value = (MagicMock(), MagicMock())
+            with patch(
+                "grandma_gcn.slackbot.gw_message.open", create=True
+            ) as mock_open:
+                with patch("slack_sdk.WebClient.files_upload_v2") as mock_upload:
+                    mock_upload.return_value = {
+                        "file": {"permalink_public": "https://fake_url"}
+                    }
 
-            consumer = Consumer(gcn_stream=mock_gcn_stream)
-            consumer.process_alert(notice)
+                    mock_open.return_value.__enter__.return_value = MagicMock()
+                    mock_obs_plan.return_value = (MagicMock(), MagicMock())
 
-            assert mock_obs_plan.call_count == 2
+                    consumer = Consumer(gcn_stream=mock_gcn_stream)
+                    consumer.process_alert(notice)
 
-            assert mock_post_msg_on_slack.call_count == 3
+    assert mock_obs_plan.call_count == 2
+    assert mock_post_msg_on_slack.call_count == 5
+    assert mock_open.call_count == 2
+    assert mock_upload.call_count == 2
+    assert "tiles_coverage_int.png" in str(mock_open.call_args_list[0][0])
+    assert (
+        mock_upload.call_args_list[0][1]["filename"]
+        == "coverage_S241102br_Tiling_map.png"
+    )

@@ -25,6 +25,7 @@ class Consumer(KafkaConsumer):
         topics = gcn_stream.gcn_config["GCN_TOPICS"]["topics"]
 
         self.gw_alert_channel = gcn_stream.gcn_config["Slack"]["gw_alert_channel"]
+        self.gw_channel_id = gcn_stream.gcn_config["Slack"]["gw_alert_channel_id"]
 
         # Subscribe to topics and receive alerts
         if gcn_stream.restart_queue:
@@ -100,6 +101,7 @@ class Consumer(KafkaConsumer):
                     self.gcn_stream.gcn_config["GWEMOPT"]["tiling_nb_tiles"],
                     self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
                     self.gw_alert_channel,
+                    self.gw_channel_id,
                     str(path_notice),
                     str(path_output_tiling),
                     self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
@@ -113,6 +115,7 @@ class Consumer(KafkaConsumer):
                     self.gcn_stream.gcn_config["GWEMOPT"]["nb_galaxies"],
                     self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
                     self.gw_alert_channel,
+                    self.gw_channel_id,
                     str(path_notice),
                     str(path_output_galaxy),
                     self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],

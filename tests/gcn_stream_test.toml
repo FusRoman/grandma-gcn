@@ -22,6 +22,7 @@ Size_region_cut = 500 # in deg²
 
 [Slack]
 gw_alert_channel = "#test_gwalerts"
+gw_alert_channel_id = "fake_id"
 
 [GWEMOPT]
 telescopes_tiling = ["TCH","TRE","TCA","FZU-CTA-N","FZU-Auger"]

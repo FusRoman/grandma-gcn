@@ -47,7 +47,10 @@ def mock_gcn_stream():
             "CLIENT": {"id": "test_id", "secret": "test_secret"},
             "KAFKA_CONFIG": {},
             "GCN_TOPICS": {"topics": ["test_topic"]},
-            "Slack": {"gw_alert_channel": "test_channel"},
+            "Slack": {
+                "gw_alert_channel": "test_channel",
+                "gw_alert_channel_id": "test_channel_id",
+            },
         }
         topics = {"test_topic": None}
         restart_queue = False

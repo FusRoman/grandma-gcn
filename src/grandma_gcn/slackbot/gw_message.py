@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, Callable
 from fink_utils.slack_bot.msg_builder import Message
 
@@ -244,13 +245,64 @@ def build_gwemopt_message(
     return msg
 
 
+def post_image_on_slack(
+    slack_client: WebClient,
+    filepath: Path,
+    filename: str,
+    filetitle: str,
+    channel_id: str,
+    alt_text: str | None = None,
+) -> str:
+    """
+    Post an image file to a Slack channel.
+
+    Parameters
+    ----------
+    slack_client : WebClient
+        The Slack client to use for posting the image.
+    filepath : Path
+        The path to the image file to be uploaded.
+    filename : str
+        The name of the file as it will appear in Slack.
+    filetitle : str
+        The title of the file as it will appear in Slack.
+    channel_id : str
+        The ID of the Slack channel where the image will be posted.
+        It is not the channel name, but the unique identifier for the channel.
+    alt_text : str | None, optional
+        Alternative text for the image, by default None.
+
+    Returns
+    -------
+    str
+        The public permalink to the uploaded image file in Slack.
+    """
+    with open(
+        filepath,
+        "rb",
+    ) as file:
+        upload_response = slack_client.files_upload_v2(
+            file=file,
+            filename=filename,
+            title=filetitle,
+            alt_text=alt_text,
+            channel=channel_id,
+        )
+
+    file_info = upload_response["file"]
+    return file_info["permalink_public"]
+
+
 def build_gwemopt_results_message(
     gw_alert: GW_alert,
     celery_task_id: int,
+    obs_strategy: GW_alert.ObservationStrategy,
+    telescopes: list[str],
     execution_time: float,
+    slack_plot_permalink: str,
 ) -> Message:
     msg = Message()
-    msg.add_header("GWEMOPT processing finished for {}".format(gw_alert.event_id))
+    msg.add_header("🗺️ GWEMOPT processing finished for {}".format(gw_alert.event_id))
     msg.add_divider()
 
     msg.add_elements(
@@ -261,7 +313,26 @@ def build_gwemopt_results_message(
         .add_elements(
             MarkdownText("Total execution time: {}".format(execution_time)),
         )
+        .add_elements(
+            MarkdownText(
+                "*Strategy :*\n {} {}".format(
+                    obs_strategy.to_emoji(), obs_strategy.value
+                )
+            ),
+        )
+        .add_elements(
+            MarkdownText(
+                "*Telescopes:*\n{}".format("\n".join(f"- {tel}" for tel in telescopes))
+            ),
+        )
+        .add_elements(
+            MarkdownText(
+                "🧭 *Coverage Map:*\n<{}|View image>".format(slack_plot_permalink)
+            ),
+        )
     )
+
+    return msg
 
 
 def new_alert_on_slack(

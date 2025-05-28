@@ -2,7 +2,12 @@ from pathlib import Path
 from fink_utils.slack_bot.bot import init_slackbot
 
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
-from grandma_gcn.slackbot.gw_message import new_alert_on_slack, build_gwemopt_message
+from grandma_gcn.slackbot.gw_message import (
+    build_gwemopt_results_message,
+    new_alert_on_slack,
+    build_gwemopt_message,
+    post_image_on_slack,
+)
 from grandma_gcn.worker.celery_app import celery
 import logging
 from celery import current_task
@@ -177,6 +182,7 @@ def gwemopt_task(
     nb_tiles: list[int],
     nside: int,
     slack_channel: str,
+    channel_id: str,
     path_notice: str,
     path_output: str,
     path_log: str,
@@ -200,6 +206,9 @@ def gwemopt_task(
         The nside parameter for the skymap.
     slack_channel : str
         The Slack channel to send the notification to.
+    channel_id : str
+        The Slack channel ID to send the notification to.
+        Different from slack_channel, this is the ID used by the Slack API.
     path_output : str
         Path to the output directory.
     path_notice : str
@@ -226,6 +235,7 @@ def gwemopt_task(
     start_task = Time.now()
     task_id = current_task.request.id
     path_notice = Path(path_notice)
+    output_path = Path(path_output)
     path_galaxy_catalog = Path(path_galaxy_catalog) if path_galaxy_catalog else None
     galaxy_catalog = (
         GalaxyCatalog.from_string(galaxy_catalog) if galaxy_catalog else None
@@ -264,21 +274,61 @@ def gwemopt_task(
                     telescopes=telescopes,
                 )
 
-                tiles, _ = run_gwemopt(
+                tiles, galaxy = run_gwemopt(
                     gw_alert,
                     telescopes,
                     nb_tiles,
                     nside=nside,
-                    path_output=Path(path_output),
+                    path_output=output_path,
                     observation_strategy=obs_strategy,
                     logger=logger,
                     path_galaxy_catalog=path_galaxy_catalog,
                     galaxy_catalog=galaxy_catalog,
                 )
 
+                print(f"Tiles: {tiles}")
+
+                print()
+                print()
+
+                print(f"Galaxy: {galaxy}")
+
+                # import pickle
+
+                # with open(output_path / "tiles.pickle", "wb") as f:
+                #     pickle.dump(tiles, f)
+
+                # with open(output_path / "galaxy.pickle", "wb") as f:
+                #     pickle.dump(galaxy, f)
+
                 _ = {k: table_to_custom_ascii(k, v) for k, v in tiles.items()}
 
+                # with open(output_path / "ascii_res.pickle", "wb") as f:
+                #     pickle.dump(ascii_results, f)
+
                 logger.info("GW_alert successfully processed.")
+
+                permalink = post_image_on_slack(
+                    worker_slack_client,
+                    filepath=output_path / "tiles_coverage_int.png",
+                    filetitle=f"{gw_alert.event_id} {obs_strategy.value} Coverage Map",
+                    filename=f"coverage_{gw_alert.event_id}_{obs_strategy.value}_map.png",
+                    channel_id=channel_id,
+                )
+
+                new_alert_on_slack(
+                    gw_alert,
+                    build_gwemopt_results_message,
+                    worker_slack_client,
+                    channel=slack_channel,
+                    logger=logger,
+                    celery_task_id=task_id,
+                    execution_time=(Time.now() - start_task).sec,
+                    obs_strategy=GW_alert.ObservationStrategy.GALAXYTARGETING,
+                    telescopes=telescopes,
+                    slack_plot_permalink=permalink,
+                )
+
     except Exception as e:
         logger.error(f"An error occurred while processing the task: {e}")
         raise e
