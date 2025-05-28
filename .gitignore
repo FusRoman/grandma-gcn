@@ -175,3 +175,6 @@ test_post_msg_slack.py
 init.sh
 catalogs/
 S241102br_*
+S25*
+fake_path_log
+test_owncloud.py
