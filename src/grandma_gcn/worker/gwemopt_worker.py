@@ -1,5 +1,4 @@
 from pathlib import Path
-import uuid
 from fink_utils.slack_bot.bot import init_slackbot
 
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
@@ -10,10 +9,13 @@ from celery import current_task
 
 from astropy.time import Time
 
-from grandma_gcn.worker.gwemopt_init import init_gwemopt
+from grandma_gcn.worker.gwemopt_init import GalaxyCatalog, init_gwemopt
+from contextlib import redirect_stdout, redirect_stderr
 
 
-def setup_task_logger(task_name: str, log_path: Path) -> logging.Logger:
+def setup_task_logger(
+    task_name: str, log_path: Path, task_id: str
+) -> tuple[logging.Logger, Path]:
     """
     Configure a logger to log into a separate file for each task.
 
@@ -23,18 +25,19 @@ def setup_task_logger(task_name: str, log_path: Path) -> logging.Logger:
         The name of the task.
     log_path : Path
         The path where the log files will be stored.
+    task_id : str
+        The unique identifier for the task, used to create a unique log file name.
 
     Returns
     -------
-    logging.Logger
-        The configured logger.
+    tuple[logging.Logger, Path]
+        A tuple containing the logger and the path to the log file.
     """
-    id_task = uuid.uuid4()
-    logger = logging.getLogger(f"gcn_stream.consumer.worker.{id_task}")
+    logger = logging.getLogger(f"gcn_stream.consumer.worker.{task_id}")
     logger.setLevel(logging.INFO)
 
     # Create a file handler for the task
-    log_file = log_path / f"{task_name}_{id_task}.log"
+    log_file = log_path / f"{task_name}_{task_id}.log"
     log_file.parent.mkdir(
         parents=True, exist_ok=True
     )  # Create the logs directory if it doesn't exist
@@ -49,7 +52,7 @@ def setup_task_logger(task_name: str, log_path: Path) -> logging.Logger:
     if not logger.handlers:  # Avoid adding multiple handlers
         logger.addHandler(file_handler)
 
-    return logger
+    return logger, log_file
 
 
 def run_gwemopt(
@@ -60,6 +63,8 @@ def run_gwemopt(
     path_output: Path,
     observation_strategy: GW_alert.ObservationStrategy,
     logger: logging.Logger,
+    path_galaxy_catalog: Path | None,
+    galaxy_catalog: GalaxyCatalog | None,
 ) -> None:
     """
     Run the gwemopt observation plan.
@@ -78,6 +83,10 @@ def run_gwemopt(
         The observation strategy to use.
     logger : logging.Logger
         Logger to use for logging. If None, a new logger will be created.
+    path_galaxy_catalog : Path | None
+        Path to the galaxy catalog directory.
+    galaxy_catalog : GalaxyCatalog | None
+        The galaxy catalog to use.
 
     Returns
     -------
@@ -102,6 +111,8 @@ def run_gwemopt(
         do_movie=True,
         moon_check=False,
         do_reference=True,
+        path_catalog=path_galaxy_catalog,
+        galaxy_catalog=galaxy_catalog,
     )
 
     logger.info("gwemopt initialized. Running observation plan...")
@@ -136,6 +147,10 @@ def table_to_custom_ascii(telescope, table):
     lines = [f"# {telescope}"]
     lines.append("rank_id       tile_id       RA       DEC       Prob   Timeobs")
 
+    if not table:
+        lines.append("# No tiles to observe")
+        return "\n".join(lines)
+
     for row in table:
         rank_id = row["rank_id"]
         tile_id = row["tile_id"]
@@ -169,6 +184,8 @@ def gwemopt_task(
     Distance_threshold: float,
     ErrorRegion_threshold: float,
     obs_strategy: str,
+    path_galaxy_catalog: str | None = None,
+    galaxy_catalog: str | None = None,
 ) -> None:
     """
     Task to process the GCN notice.
@@ -193,11 +210,27 @@ def gwemopt_task(
         Threshold for distance cut.
     ErrorRegion_threshold : float
         Threshold for size region cut.
+    path_galaxy_catalog : str
+        Path to the galaxy catalog directory.
+    galaxy_catalog : str
+        The galaxy catalog to use.
     """
     obs_strategy = GW_alert.ObservationStrategy.from_string(obs_strategy)
+    if obs_strategy == GW_alert.ObservationStrategy.GALAXYTARGETING and (
+        path_galaxy_catalog is None or galaxy_catalog is None
+    ):
+        raise ValueError(
+            "Observation strategy is set to GALAXYTARGETING but no galaxy catalog path or galaxy catalog provided."
+        )
+
     start_task = Time.now()
     task_id = current_task.request.id
     path_notice = Path(path_notice)
+    path_galaxy_catalog = Path(path_galaxy_catalog) if path_galaxy_catalog else None
+    galaxy_catalog = (
+        GalaxyCatalog.from_string(galaxy_catalog) if galaxy_catalog else None
+    )
+
     try:
         with open(path_notice, "rb") as fp:
             json_byte = fp.read()
@@ -209,40 +242,50 @@ def gwemopt_task(
             ErrorRegion_threshold=ErrorRegion_threshold,
         )  # Configure a logger specific to this task
 
-        logger = setup_task_logger(
-            "gwemopt_task_{}".format(gw_alert.event_id), Path(path_log)
-        )
-        logger.info("Starting gwemopt_task...")
-
-        worker_slack_client = init_slackbot(logger)
-
-        new_alert_on_slack(
-            gw_alert,
-            build_gwemopt_message,
-            worker_slack_client,
-            channel=slack_channel,
-            logger=logger,
-            obs_strategy=obs_strategy,
-            celery_task_id=task_id,
-            task_start_time=start_task,
-            telescopes=telescopes,
+        logger, log_file_path = setup_task_logger(
+            "gwemopt_task_{}".format(gw_alert.event_id), Path(path_log), task_id
         )
 
-        tiles, _ = run_gwemopt(
-            gw_alert,
-            telescopes,
-            nb_tiles,
-            nside=nside,
-            path_output=Path(path_output),
-            observation_strategy=obs_strategy,
-            logger=logger,
-        )
+        with open(log_file_path, "a") as log_file:
+            with redirect_stdout(log_file), redirect_stderr(log_file):
+                logger.info("Starting gwemopt_task...")
 
-        print(f"Tiles: {tiles}")
+                worker_slack_client = init_slackbot(logger)
 
-        _ = {k: table_to_custom_ascii(k, v) for k, v in tiles.items()}
+                new_alert_on_slack(
+                    gw_alert,
+                    build_gwemopt_message,
+                    worker_slack_client,
+                    channel=slack_channel,
+                    logger=logger,
+                    obs_strategy=obs_strategy,
+                    celery_task_id=task_id,
+                    task_start_time=start_task,
+                    telescopes=telescopes,
+                )
 
-        logger.info("GW_alert successfully processed.")
+                tiles, _ = run_gwemopt(
+                    gw_alert,
+                    telescopes,
+                    nb_tiles,
+                    nside=nside,
+                    path_output=Path(path_output),
+                    observation_strategy=obs_strategy,
+                    logger=logger,
+                    path_galaxy_catalog=path_galaxy_catalog,
+                    galaxy_catalog=galaxy_catalog,
+                )
+
+                _ = {k: table_to_custom_ascii(k, v) for k, v in tiles.items()}
+
+                logger.info("GW_alert successfully processed.")
     except Exception as e:
         logger.error(f"An error occurred while processing the task: {e}")
         raise e
+
+
+@celery.task(name="gwemopt_post_task")
+def gwemopt_post_task(results):
+    # results est une liste des retours de chaque gwemopt_task
+    print("Post-traitement exécuté après les deux tâches.")
+    print("Résultats:", results)

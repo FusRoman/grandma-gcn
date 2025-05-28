@@ -2,7 +2,7 @@ import tempfile
 import logging
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.gcn_stream.stream import load_gcn_config
-from grandma_gcn.worker.gwemopt_init import init_gwemopt
+from grandma_gcn.worker.gwemopt_init import GalaxyCatalog, init_gwemopt
 import pytest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
@@ -34,6 +34,8 @@ def test_init_gwemopt_basic(gw_alert_unsignificant: GW_alert):
         do_movie=False,
         moon_check=False,
         do_reference=True,
+        path_catalog=None,
+        galaxy_catalog=None,
     )
 
     # Vérification des paramètres (inchangé)
@@ -63,7 +65,7 @@ def test_init_gwemopt_basic(gw_alert_unsignificant: GW_alert):
         "pixarea",
         "pixarea_deg2",
     ]:
-        assert key in map_struct, f"Clé manquante dans map_struct: {key}"
+        assert key in map_struct, f"Missing key in map_struct: {key}"
 
     # Types et cohérence des shapes
     assert hasattr(map_struct["prob"], "shape")
@@ -80,6 +82,26 @@ def test_init_gwemopt_basic(gw_alert_unsignificant: GW_alert):
     # Vérification des champs optionnels si présents (3D)
     for key in ["distmu", "distsigma", "distnorm"]:
         assert map_struct[key] is None
+
+    params, map_struct = init_gwemopt(
+        flat_map,
+        False,
+        exposure_time=[100],
+        max_nb_tile=[10],
+        nside=nside,
+        do_3d=False,
+        do_plot=False,
+        do_observability=False,
+        do_footprint=False,
+        do_movie=False,
+        moon_check=False,
+        do_reference=True,
+        path_catalog=Path("catalogs"),
+        galaxy_catalog=GalaxyCatalog.MANGROVE,
+    )
+
+    assert params["catalogDir"] == "catalogs"
+    assert params["galaxy_catalog"] == "mangrove"
 
 
 def test_init_gwemopt_S241102_update(S241102_update: GW_alert):
@@ -99,6 +121,8 @@ def test_init_gwemopt_S241102_update(S241102_update: GW_alert):
         do_movie=False,
         moon_check=False,
         do_reference=True,
+        path_catalog=None,
+        galaxy_catalog=None,
     )
 
     # Vérification des paramètres
@@ -173,7 +197,7 @@ def test_gwemopt_task_celery(tmp_path, S241102_update):
             with patch(
                 "grandma_gcn.worker.gwemopt_worker.setup_task_logger"
             ) as mock_logger:
-                mock_logger.return_value = logging.getLogger()
+                mock_logger.return_value = (logging.getLogger(), Path("fake_path_log"))
 
                 # Exécution synchrone de la tâche celery
                 gwemopt_task.apply(

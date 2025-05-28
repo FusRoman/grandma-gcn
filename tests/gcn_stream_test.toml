@@ -29,3 +29,5 @@ tiling_nb_tiles = [10,10,10,15,15]
 telescopes_galaxy = ["KAO"]
 nb_galaxies = [10]
 nside_flat = 64
+path_galaxy_catalog = "catalogs/"
+galaxy_catalog = "mangrove"

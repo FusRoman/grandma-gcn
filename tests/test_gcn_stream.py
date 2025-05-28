@@ -3,6 +3,7 @@ from pathlib import Path
 import tempfile
 
 import pytest
+from unittest.mock import MagicMock
 
 from grandma_gcn.gcn_stream.consumer import Consumer
 from grandma_gcn.gcn_stream.gcn_logging import init_logging
@@ -199,9 +200,27 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
         "grandma_gcn.slackbot.gw_message.post_msg_on_slack"
     )
 
-    # Mock gwemopt_task to avoid running the real Celery task
-    mock_gwemopt_task = mocker.patch("grandma_gcn.gcn_stream.consumer.gwemopt_task")
-    mock_gwemopt_task.delay.return_value = mocker.Mock(id=42)
+    # Mock gwemopt_task.s to avoid running the real Celery task
+    mock_gwemopt_task = mocker.patch(
+        "grandma_gcn.gcn_stream.consumer.gwemopt_task", autospec=True
+    )
+    fake_signature = MagicMock()
+    fake_signature.delay = MagicMock()
+    fake_signature.apply_async = MagicMock()
+    mock_gwemopt_task.s.return_value = fake_signature
+
+    # Mock gwemopt_post_task to avoid running the real Celery chord callback
+    mock_gwemopt_post_task = mocker.patch(
+        "grandma_gcn.gcn_stream.consumer.gwemopt_post_task", autospec=True
+    )
+    fake_post_signature = MagicMock()
+    fake_post_signature.delay = MagicMock()
+    fake_post_signature.apply_async = MagicMock()
+    mock_gwemopt_post_task.s.return_value = fake_post_signature
+
+    # Mock chord to avoid celery serialization issues
+    mock_chord = mocker.patch("grandma_gcn.gcn_stream.consumer.chord", autospec=True)
+    mock_chord.return_value = lambda *args, **kwargs: None
 
     # Create a temporary directory for saving notices
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -218,7 +237,8 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
         assert mock_poll_method.call_count == 121
         mock_commit_method.assert_called_once_with(mock_message)
         mock_post_msg_on_slack.assert_called()  # Ensure post_msg_on_slack is called
-        mock_gwemopt_task.delay.assert_called()  # Ensure gwemopt_task.delay is called
+        mock_gwemopt_task.s.assert_called()  # Ensure gwemopt_task.s is called
+        mock_gwemopt_post_task.s.assert_called()  # Ensure gwemopt_post_task.s is called
         assert len(message_queue) == 0
 
         # Verify that the notice was saved to the temporary directory

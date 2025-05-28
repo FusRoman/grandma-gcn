@@ -1,11 +1,12 @@
 from pathlib import Path
+from celery import chord
 from gcn_kafka import Consumer as KafkaConsumer
 import logging
 import uuid
 
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.slackbot.gw_message import build_gwalert_msg, new_alert_on_slack
-from grandma_gcn.worker.gwemopt_worker import gwemopt_task
+from grandma_gcn.worker.gwemopt_worker import gwemopt_post_task, gwemopt_task
 
 
 class Consumer(KafkaConsumer):
@@ -92,41 +93,39 @@ class Consumer(KafkaConsumer):
             )
 
             self.logger.info("Sending gwemopt task to celery worker")
-            task_tiling = gwemopt_task.delay(
-                self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_tiling"],
-                self.gcn_stream.gcn_config["GWEMOPT"]["tiling_nb_tiles"],
-                self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
-                self.gw_alert_channel,
-                str(path_notice),
-                str(path_output_tiling),
-                self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
-                gw_alert.BBH_threshold,
-                gw_alert.Distance_threshold,
-                gw_alert.ErrorRegion_threshold,
-                GW_alert.ObservationStrategy.TILING.name,
-            )
 
-            self.logger.info(
-                f"Gwemopt launched for tiling telescopes with ID: {task_tiling.id}"
-            )
+            chord_tasks = [
+                gwemopt_task.s(
+                    self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_tiling"],
+                    self.gcn_stream.gcn_config["GWEMOPT"]["tiling_nb_tiles"],
+                    self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
+                    self.gw_alert_channel,
+                    str(path_notice),
+                    str(path_output_tiling),
+                    self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
+                    gw_alert.BBH_threshold,
+                    gw_alert.Distance_threshold,
+                    gw_alert.ErrorRegion_threshold,
+                    GW_alert.ObservationStrategy.TILING.name,
+                ),
+                gwemopt_task.s(
+                    self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_galaxy"],
+                    self.gcn_stream.gcn_config["GWEMOPT"]["nb_galaxies"],
+                    self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
+                    self.gw_alert_channel,
+                    str(path_notice),
+                    str(path_output_galaxy),
+                    self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
+                    gw_alert.BBH_threshold,
+                    gw_alert.Distance_threshold,
+                    gw_alert.ErrorRegion_threshold,
+                    GW_alert.ObservationStrategy.GALAXYTARGETING.name,
+                    self.gcn_stream.gcn_config["GWEMOPT"]["path_galaxy_catalog"],
+                    self.gcn_stream.gcn_config["GWEMOPT"]["galaxy_catalog"],
+                ),
+            ]
 
-            task_galaxy = gwemopt_task.delay(
-                self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_galaxy"],
-                self.gcn_stream.gcn_config["GWEMOPT"]["nb_galaxies"],
-                self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
-                self.gw_alert_channel,
-                str(path_notice),
-                str(path_output_galaxy),
-                self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
-                gw_alert.BBH_threshold,
-                gw_alert.Distance_threshold,
-                gw_alert.ErrorRegion_threshold,
-                GW_alert.ObservationStrategy.GALAXYTARGETING.name,
-            )
-
-            self.logger.info(
-                f"Gwemopt launched for galaxy targeting telescopes with ID: {task_galaxy.id}"
-            )
+            chord(chord_tasks)(gwemopt_post_task.s())
 
     def start_poll_loop(
         self, interval_between_polls: int = 1, max_retries: int = 120

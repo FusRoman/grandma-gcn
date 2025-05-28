@@ -239,8 +239,29 @@ def build_gwemopt_message(
             ),
         )
     )
+    msg.add_divider()
 
     return msg
+
+
+def build_gwemopt_results_message(
+    gw_alert: GW_alert,
+    celery_task_id: int,
+    execution_time: float,
+) -> Message:
+    msg = Message()
+    msg.add_header("GWEMOPT processing finished for {}".format(gw_alert.event_id))
+    msg.add_divider()
+
+    msg.add_elements(
+        BaseSection()
+        .add_elements(
+            MarkdownText("*Task ID:*\n{}".format(celery_task_id)),
+        )
+        .add_elements(
+            MarkdownText("Total execution time: {}".format(execution_time)),
+        )
+    )
 
 
 def new_alert_on_slack(

@@ -1,9 +1,38 @@
-from typing import Any
+from enum import Enum
+from pathlib import Path
+from typing import Any, Self
 
 from numpy import ndarray
 
 from gwemopt.utils import read_skymap
 from healpy import reorder
+
+
+class GalaxyCatalog(Enum):
+    MRS2 = "2MRS"
+    GLADE = "GLADE"
+    CLU = "CLU"
+    MANGROVE = "mangrove"
+
+    @classmethod
+    def from_string(cls, catalog_name: str) -> Self:
+        """
+        Convert a string to a GalaxyCatalog enum member.
+
+        Parameters
+        ----------
+        catalog_name : str
+            The name of the galaxy catalog.
+
+        Returns
+        -------
+        GalaxyCatalog
+            The corresponding GalaxyCatalog enum member.
+        """
+        for catalog in cls:
+            if catalog.value.lower() == catalog_name.lower():
+                return catalog
+        raise ValueError(f"Unknown galaxy catalog: {catalog_name}")
 
 
 def make_params(
@@ -17,6 +46,8 @@ def make_params(
     do_movie: bool,
     moon_check: bool,
     do_reference: bool,
+    path_catalog: Path | None,
+    galaxy_catalog: GalaxyCatalog | None,
 ) -> dict[str, Any]:
     """
     Create the parameters for the gwemopt launcher.
@@ -42,6 +73,10 @@ def make_params(
         Whether to check for moon interference.
     do_reference : bool
         Whether to use reference images.
+    path_catalog : Path | None, optional
+        Path to the catalog directory.
+    galaxy_catalog : GalaxyCatalog, optional
+        The galaxy catalog to use. Defaults to GalaxyCatalog.MANGROVE.
     Returns
     -------
     dict[str, Any]
@@ -92,10 +127,10 @@ def make_params(
         "maximumOverlap": 0.2,
         "catalog_n": 1.0,
         "doUseCatalog": False,
-        "catalogDir": "/home/roman/Documents/Work/too-mm/configs_gwemopt/catalogs/",
+        "catalogDir": str(path_catalog),
         "tilingDir": "/home/roman/Documents/Work/too-mm/configs_gwemopt/tiling/",
         "configDirectory": "/home/roman/Documents/Work/too-mm/configs_gwemopt/config/",
-        "galaxy_catalog": "mangrove",
+        "galaxy_catalog": galaxy_catalog.value if galaxy_catalog else None,
         "doCatalog": False,
         "galaxy_grade": "Smass",
         "writeCatalog": False,
@@ -128,6 +163,8 @@ def init_gwemopt(
     do_movie: bool,
     moon_check: bool,
     do_reference: bool,
+    path_catalog: Path | None,
+    galaxy_catalog: GalaxyCatalog | None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Start the gwemopt launcher with the given parameters.
@@ -158,6 +195,10 @@ def init_gwemopt(
         Whether to check for moon interference.
     do_reference : bool
         Whether to use reference images.
+    path_catalog : Path | None
+        Path to the catalog directory.
+    galaxy_catalog : GalaxyCatalog | None
+        The galaxy catalog to use.
 
     Returns
     -------
@@ -175,6 +216,8 @@ def init_gwemopt(
         do_movie,
         moon_check,
         do_reference,
+        path_catalog=path_catalog,
+        galaxy_catalog=galaxy_catalog,
     )
 
     if convert_to_nested:
