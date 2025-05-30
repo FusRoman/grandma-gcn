@@ -31,7 +31,11 @@ build-backend = "pdm.backend"
 distribution = true
 
 [project.optional-dependencies]
-test = ["pytest>=8.3.3", "pytest-mock>=3.14.0"]
+test = [
+    "pytest>=8.3.3",
+    "pytest-mock>=3.14.0",
+    "pytest-cov>=6.1.1",
+]
 
 lint = ["black>=24.10.0", "pre-commit>=4.0.1", "pylint>=3.3.2"]
 
@@ -66,4 +70,4 @@ markers = [
 ]
 
 [tool.pdm.scripts]
-test = 'pytest -m "not e2e"'
+test = 'pytest -m "not e2e" --cov=grandma_gcn --cov-report=xml'
