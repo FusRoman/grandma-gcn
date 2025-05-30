@@ -433,13 +433,17 @@ def gwemopt_post_task(results):
         A tuple containing the path to the notice file and the path to the output directory.
     """
 
-    res_tiling, _ = results
+    res_tiling, res_galaxy = results
 
     path_notice = Path(res_tiling[0])
     # remove the notice file after processing
     path_notice.unlink()
 
     folder_gwemopt_output_tiling = Path(res_tiling[1])
+    folder_gwemopt_output_galaxy = Path(res_galaxy[1])
 
     if folder_gwemopt_output_tiling.exists() and folder_gwemopt_output_tiling.is_dir():
         shutil.rmtree(folder_gwemopt_output_tiling)
+
+    if folder_gwemopt_output_galaxy.exists() and folder_gwemopt_output_galaxy.is_dir():
+        shutil.rmtree(folder_gwemopt_output_galaxy)
