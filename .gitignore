@@ -169,3 +169,13 @@ gwemopt_output/
 gwemopt_output_2048_nside/
 multiorder_skymap.fits.gz
 test_gwemopt_local.py
+check_gwemopt_output.py
+.python-version
+test_post_msg_slack.py
+init.sh
+catalogs/
+S241102br_*
+S25*
+fake_path_log
+test_owncloud.py
+gwemopt_task

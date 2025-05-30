@@ -1,3 +1,5 @@
+from pathlib import Path
+from typing import Any, Callable
 from fink_utils.slack_bot.msg_builder import Message
 
 from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
@@ -186,11 +188,168 @@ def build_gwalert_msg(gw_alert: GW_alert) -> Message:
     return msg
 
 
-def new_gwalert_on_slack(
+def build_gwemopt_message(
     gw_alert: GW_alert,
+    obs_strategy: GW_alert.ObservationStrategy,
+    celery_task_id: int,
+    task_start_time: Time,
+    telescopes: list[str],
+) -> Message:
+    """
+    Build a message for the new GWEMOPT processing task.
+
+    Parameters
+    ----------
+    gw_alert : GW_alert
+        The GW alert object.
+    obs_strategy : GW_alert.ObservationStrategy
+        The observation strategy used for the processing.
+    celery_task_id : int
+        The ID of the Celery task.
+    task_start_time : Time
+        The start time of the task.
+    telescopes : list[str]
+        List of telescopes involved in the gwemopt task.
+
+
+    Returns
+    -------
+    Message
+        The message object containing the task information.
+    """
+
+    gw_alert.logger.info("Building message for new GWEMOPT processing task")
+
+    msg = Message()
+    msg.add_header("🧠 New GWEMOPT processing for {}".format(gw_alert.event_id))
+    msg.add_divider()
+    msg.add_elements(
+        BaseSection()
+        .add_elements(
+            MarkdownText("🆔 *Task ID:*\n{}".format(celery_task_id)),
+        )
+        .add_elements(
+            MarkdownText("⏱️ Task started at: {}".format(task_start_time.iso)),
+        )
+        .add_elements(
+            MarkdownText(
+                "*Strategy :*\n{} {}".format(
+                    obs_strategy.to_emoji(), obs_strategy.value
+                )
+            ),
+        )
+        .add_elements(
+            MarkdownText(
+                "🔭 *Telescopes:*\n{}".format(
+                    "\n".join(f"- {tel}" for tel in telescopes)
+                )
+            ),
+        )
+    )
+    msg.add_divider()
+
+    return msg
+
+
+def post_image_on_slack(
+    slack_client: WebClient,
+    filepath: Path,
+    filename: str,
+    filetitle: str,
+    channel_id: str,
+    alt_text: str | None = None,
+) -> str:
+    """
+    Post an image file to a Slack channel.
+
+    Parameters
+    ----------
+    slack_client : WebClient
+        The Slack client to use for posting the image.
+    filepath : Path
+        The path to the image file to be uploaded.
+    filename : str
+        The name of the file as it will appear in Slack.
+    filetitle : str
+        The title of the file as it will appear in Slack.
+    channel_id : str
+        The ID of the Slack channel where the image will be posted.
+        It is not the channel name, but the unique identifier for the channel.
+    alt_text : str | None, optional
+        Alternative text for the image, by default None.
+
+    Returns
+    -------
+    str
+        The public permalink to the uploaded image file in Slack.
+    """
+    with open(
+        filepath,
+        "rb",
+    ) as file:
+        upload_response = slack_client.files_upload_v2(
+            file=file,
+            filename=filename,
+            title=filetitle,
+            alt_text=alt_text,
+            channel=channel_id,
+        )
+
+    file_info = upload_response["file"]
+    return file_info["permalink_public"]
+
+
+def build_gwemopt_results_message(
+    gw_alert: GW_alert,
+    celery_task_id: int,
+    obs_strategy: GW_alert.ObservationStrategy,
+    telescopes: list[str],
+    execution_time: float,
+    slack_plot_permalink: str | None,
+) -> Message:
+    msg = Message()
+    msg.add_header("🗺️ GWEMOPT processing finished for {}".format(gw_alert.event_id))
+    msg.add_divider()
+
+    msg.add_elements(
+        BaseSection()
+        .add_elements(
+            MarkdownText("*Task ID:*\n{}".format(celery_task_id)),
+        )
+        .add_elements(
+            MarkdownText("Total execution time: {:.3f}".format(execution_time)),
+        )
+        .add_elements(
+            MarkdownText(
+                "*Strategy :*\n {} {}".format(
+                    obs_strategy.to_emoji(), obs_strategy.value
+                )
+            ),
+        )
+        .add_elements(
+            MarkdownText(
+                "*Telescopes:*\n{}".format("\n".join(f"- {tel}" for tel in telescopes))
+            ),
+        )
+        .add_elements(
+            MarkdownText(
+                "🧭 *Coverage Map:*\n<{}|View image>".format(slack_plot_permalink)
+            )
+            if slack_plot_permalink
+            else MarkdownText("🧭 *Coverage Map:*\nNo coverage map available.")
+        )
+    )
+
+    return msg
+
+
+def new_alert_on_slack(
+    gw_alert: GW_alert,
+    build_msg_function: Callable[[GW_alert], Message],
     slack_client: WebClient,
     channel: str,
     logger: LoggerNewLine,
+    **kwargs: dict[str, Any],
 ) -> None:
     """
     Send the alert to slack
@@ -206,7 +365,7 @@ def new_gwalert_on_slack(
         the logger to use
     """
 
-    msg = build_gwalert_msg(gw_alert)
+    msg = build_msg_function(gw_alert, **kwargs)
 
     post_msg_on_slack(
         slack_client,

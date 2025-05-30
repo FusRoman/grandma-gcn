@@ -1,8 +1,10 @@
 import tempfile
 import logging
+
+from yarl import URL
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.gcn_stream.stream import load_gcn_config
-from grandma_gcn.worker.gwemopt_init import init_gwemopt
+from grandma_gcn.worker.gwemopt_init import GalaxyCatalog, init_gwemopt
 import pytest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
@@ -10,6 +12,7 @@ from pathlib import Path
 from grandma_gcn.worker.gwemopt_worker import gwemopt_task
 from tests.test_gw_alert import open_notice_file
 from grandma_gcn.worker.celery_app import celery
+from grandma_gcn.worker.owncloud_client import OwncloudClient
 
 
 @pytest.fixture(autouse=True)
@@ -34,6 +37,8 @@ def test_init_gwemopt_basic(gw_alert_unsignificant: GW_alert):
         do_movie=False,
         moon_check=False,
         do_reference=True,
+        path_catalog=None,
+        galaxy_catalog=None,
     )
 
     # Vérification des paramètres (inchangé)
@@ -63,7 +68,7 @@ def test_init_gwemopt_basic(gw_alert_unsignificant: GW_alert):
         "pixarea",
         "pixarea_deg2",
     ]:
-        assert key in map_struct, f"Clé manquante dans map_struct: {key}"
+        assert key in map_struct, f"Missing key in map_struct: {key}"
 
     # Types et cohérence des shapes
     assert hasattr(map_struct["prob"], "shape")
@@ -80,6 +85,26 @@ def test_init_gwemopt_basic(gw_alert_unsignificant: GW_alert):
     # Vérification des champs optionnels si présents (3D)
     for key in ["distmu", "distsigma", "distnorm"]:
         assert map_struct[key] is None
+
+    params, map_struct = init_gwemopt(
+        flat_map,
+        False,
+        exposure_time=[100],
+        max_nb_tile=[10],
+        nside=nside,
+        do_3d=False,
+        do_plot=False,
+        do_observability=False,
+        do_footprint=False,
+        do_movie=False,
+        moon_check=False,
+        do_reference=True,
+        path_catalog=Path("catalogs"),
+        galaxy_catalog=GalaxyCatalog.MANGROVE,
+    )
+
+    assert params["catalogDir"] == "catalogs"
+    assert params["galaxy_catalog"] == "mangrove"
 
 
 def test_init_gwemopt_S241102_update(S241102_update: GW_alert):
@@ -99,6 +124,8 @@ def test_init_gwemopt_S241102_update(S241102_update: GW_alert):
         do_movie=False,
         moon_check=False,
         do_reference=True,
+        path_catalog=None,
+        galaxy_catalog=None,
     )
 
     # Vérification des paramètres
@@ -147,7 +174,7 @@ def test_init_gwemopt_S241102_update(S241102_update: GW_alert):
 
 
 @pytest.mark.usefixtures("tmp_path")
-def test_gwemopt_task_celery(tmp_path, S241102_update):
+def test_gwemopt_task_celery(mocker, tmp_path, S241102_update):
 
     # Create a temporary directory for saving notices
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -163,6 +190,9 @@ def test_gwemopt_task_celery(tmp_path, S241102_update):
         Distance_threshold = 500
         ErrorRegion_threshold = 500
 
+        mock_owncloud_mkdir_request = mocker.patch("requests.request")
+        mock_owncloud_mkdir_request.return_value.status_code = 201
+
         # Patch Observation_plan_multiple pour éviter le calcul lourd
         with patch(
             "grandma_gcn.gcn_stream.gw_alert.Observation_plan_multiple"
@@ -173,7 +203,7 @@ def test_gwemopt_task_celery(tmp_path, S241102_update):
             with patch(
                 "grandma_gcn.worker.gwemopt_worker.setup_task_logger"
             ) as mock_logger:
-                mock_logger.return_value = logging.getLogger()
+                mock_logger.return_value = (logging.getLogger(), Path("fake_path_log"))
 
                 # Exécution synchrone de la tâche celery
                 gwemopt_task.apply(
@@ -181,11 +211,21 @@ def test_gwemopt_task_celery(tmp_path, S241102_update):
                         telescopes,
                         nb_tiles,
                         nside,
+                        "#test_channel",
+                        "CHANNELID",
+                        {
+                            "username": "test_user",
+                            "password": "test_pass",
+                            "base_url": "https://owncloud.example.com",
+                        },
+                        "https://owncloud.example.com/S241102br/GWEMOPT/UPDATE_fixeduuidhex",
                         str(notice_path),
                         str(path_output),
+                        str(tmp_path),
                         BBH_threshold,
                         Distance_threshold,
                         ErrorRegion_threshold,
+                        GW_alert.ObservationStrategy.TILING.name,
                     ]
                 )
 
@@ -193,15 +233,11 @@ def test_gwemopt_task_celery(tmp_path, S241102_update):
 
 
 def test_process_alert_calls(mocker):
-    """
-    Teste que process_alert crée bien un GW_alert et retourne un message selon le score.
-    """
     from grandma_gcn.gcn_stream.consumer import Consumer
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Mock gcn_stream et sa config
         mock_gcn_stream = MagicMock()
         mock_gcn_stream.gcn_config = load_gcn_config(
             Path("tests", "gcn_stream_test.toml"), logger=logging.getLogger()
@@ -214,15 +250,61 @@ def test_process_alert_calls(mocker):
             "grandma_gcn.slackbot.gw_message.post_msg_on_slack"
         )
 
-        # Patch Observation_plan_multiple pour éviter le calcul lourd
-        with patch(
-            "grandma_gcn.gcn_stream.gw_alert.Observation_plan_multiple"
-        ) as mock_obs_plan:
-            mock_obs_plan.return_value = (MagicMock(), MagicMock())
+        mock_owncloud_mkdir_request = mocker.patch("requests.request")
+        mock_owncloud_mkdir_request.return_value.status_code = 201
 
-            consumer = Consumer(gcn_stream=mock_gcn_stream)
-            consumer.process_alert(notice)
+        # Patch uuid.uuid4 pour retourner un objet avec .hex constant
+        class DummyUUID:
+            hex = "fixeduuidhex"
 
-            assert mock_obs_plan.call_count == 2
+        with patch("uuid.uuid4", return_value=DummyUUID()):
+            with patch(
+                "grandma_gcn.gcn_stream.gw_alert.Observation_plan_multiple"
+            ) as mock_obs_plan:
+                with patch(
+                    "grandma_gcn.slackbot.gw_message.open", create=True
+                ) as mock_open:
+                    with patch("slack_sdk.WebClient.files_upload_v2") as mock_upload:
+                        mock_upload.return_value = {
+                            "file": {"permalink_public": "https://fake_url"}
+                        }
 
-            mock_post_msg_on_slack.assert_called_once()
+                        mock_open.return_value.__enter__.return_value = MagicMock()
+                        mock_obs_plan.return_value = (MagicMock(), MagicMock())
+
+                        # Patch la méthode mkdir de OwncloudClient
+                        with patch.object(
+                            OwncloudClient,
+                            "mkdir",
+                            autospec=True,
+                            wraps=OwncloudClient.mkdir,
+                        ) as spy_mkdir:
+                            consumer = Consumer(gcn_stream=mock_gcn_stream)
+                            consumer.process_alert(notice)
+
+                            # Vérifie que mkdir a été appelé avec le bon argument
+                            mkdir_args = [
+                                call.args[1] for call in spy_mkdir.call_args_list
+                            ]
+                            assert (
+                                "Candidates/GW/S241102br/GWEMOPT/UPDATE_fixeduuidhex/TILING"
+                                == mkdir_args[7]
+                            )
+
+        assert mock_obs_plan.call_count == 2
+        assert mock_post_msg_on_slack.call_count == 5
+        assert mock_open.call_count == 2
+        assert mock_upload.call_count == 2
+        assert "tiles_coverage_int.png" in str(mock_open.call_args_list[0][0])
+        assert (
+            mock_upload.call_args_list[0][1]["filename"]
+            == "coverage_S241102br_Tiling_map.png"
+        )
+
+        mock_owncloud_mkdir_request.call_count == 11
+        _, kwargs = mock_owncloud_mkdir_request.call_args
+
+        assert kwargs["method"] == "MKCOL"
+        assert kwargs["url"] == URL(
+            "https://owncloud.example.com/Candidates/GW/S241102br/GWEMOPT/UPDATE_fixeduuidhex/GALAXYTARGETING/plots"
+        )

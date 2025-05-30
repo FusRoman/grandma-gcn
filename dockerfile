@@ -9,7 +9,7 @@ ENV GRANDMA_APP_HOME /home/${USR}/code
 
 # Install OS libraries and add user specific to this project
 RUN apt-get update \
- && apt-get install -y vim nano \
+ && apt-get install -y vim nano git gcc \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd -g ${PROJECT_GID} ${USR_GROUP} \
  && useradd --create-home --no-log-init -u ${PROJECT_UID} -g ${PROJECT_GID} $USR \

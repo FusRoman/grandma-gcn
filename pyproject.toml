@@ -14,8 +14,9 @@ dependencies = [
     "astropy-healpix>=1.1.2",
     "celery[redis]>=5.5.2",
     "dotenv>=0.9.9",
-    "gwemopt @ git+https://github.com/FusRoman/old_gwemopt@073ec063968b0193e1fe9b2a17e2a85ec11e07b9",
+    "gwemopt @ git+https://github.com/FusRoman/old_gwemopt@v1.1.1",
     "ligo-skymap>=2.4.0",
+    "yarl>=1.20.0",
 ]
 requires-python = ">=3.12"
 readme = "README.md"
@@ -58,3 +59,11 @@ max-line-length = 88
 extend-ignore = ["E203", "E701", "E501"]
 exclude = [".git", "__pycache__", "build", "dist", "*.egg-info"]
 max-complexity = 10
+
+[tool.pytest.ini_options]
+markers = [
+    "e2e: run tests that need the app_test and the db_test (deselect with '-m \"not e2e\"')",
+]
+
+[tool.pdm.scripts]
+test = 'pytest -m "not e2e"'

@@ -4,11 +4,6 @@ from dotenv import dotenv_values
 from os import environ
 from celery.utils.log import get_task_logger
 
-# needed to register the tasks for celery
-import importlib
-
-importlib.import_module("grandma_gcn.worker.gwemopt_worker")
-
 
 def initialize_celery(env_file: Path) -> Celery:
     """

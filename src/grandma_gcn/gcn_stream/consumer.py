@@ -1,11 +1,15 @@
 from pathlib import Path
+from celery import chord
 from gcn_kafka import Consumer as KafkaConsumer
 import logging
 import uuid
 
+from yarl import URL
+
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
-from grandma_gcn.slackbot.gw_message import new_gwalert_on_slack
-from grandma_gcn.worker.gwemopt_worker import gwemopt_task
+from grandma_gcn.slackbot.gw_message import build_gwalert_msg, new_alert_on_slack
+from grandma_gcn.worker.gwemopt_worker import gwemopt_post_task, gwemopt_task
+from grandma_gcn.worker.owncloud_client import OwncloudClient
 
 
 class Consumer(KafkaConsumer):
@@ -19,11 +23,14 @@ class Consumer(KafkaConsumer):
             client_secret=gcn_stream.gcn_config["CLIENT"]["secret"],
         )
 
+        self.owncloud_client = OwncloudClient(gcn_stream.gcn_config.get("OWNCLOUD"))
+
         self.gcn_stream = gcn_stream
 
         topics = gcn_stream.gcn_config["GCN_TOPICS"]["topics"]
 
         self.gw_alert_channel = gcn_stream.gcn_config["Slack"]["gw_alert_channel"]
+        self.gw_channel_id = gcn_stream.gcn_config["Slack"]["gw_alert_channel_id"]
 
         # Subscribe to topics and receive alerts
         if gcn_stream.restart_queue:
@@ -52,6 +59,61 @@ class Consumer(KafkaConsumer):
             p.offset = 0
         consumer.assign(partitions)
 
+    def init_owncloud_folders(self, gw_alert: GW_alert) -> URL:
+        """
+        Initialize the ownCloud folders for the given GW alert.
+
+        Parameters
+        ----------
+        gw_alert: The GW alert object containing event information.
+
+        Returns
+        -------
+        URL: The URL of the alert folder created on ownCloud.
+        """
+        path_gw_alert = "Candidates/GW/{}".format(gw_alert.event_id)
+        # create a new folder on ownCloud for this alert
+        path_owncloud_gw = self.owncloud_client.mkdir(path_gw_alert)
+
+        self.logger.info(f"Folder {path_owncloud_gw} successfully created on ownCloud")
+        path_gwemopt = path_gw_alert + "/GWEMOPT"
+        path_images = path_gw_alert + "/IMAGES"
+        path_knc_images = path_gw_alert + "/KNC_IMAGES"
+        path_logbook = path_gw_alert + "/LOGBOOK"
+        path_voevents = path_gw_alert + "/VOEVENTS"
+
+        # create subfolders for gwemopt, images, knc_images, logbook and voevents
+        path_owncloud_gwemopt = self.owncloud_client.mkdir(path_gwemopt)
+        self.logger.info(
+            f"Folder {path_owncloud_gwemopt} successfully created on ownCloud"
+        )
+
+        # create subfolder for the alert type where the gwemopt products will be stored
+        path_alert = path_gwemopt + f"/{gw_alert.event_type.value}_{uuid.uuid4().hex}"
+        path_owncloud_alert = self.owncloud_client.mkdir(path_alert)
+        self.logger.info(
+            f"Folder {path_owncloud_alert} successfully created on ownCloud"
+        )
+
+        path_owncloud_images = self.owncloud_client.mkdir(path_images)
+        self.logger.info(
+            f"Folder {path_owncloud_images} successfully created on ownCloud"
+        )
+        path_owncloud_knc_images = self.owncloud_client.mkdir(path_knc_images)
+        self.logger.info(
+            f"Folder {path_owncloud_knc_images} successfully created on ownCloud"
+        )
+        path_owncloud_logbook = self.owncloud_client.mkdir(path_logbook)
+        self.logger.info(
+            f"Folder {path_owncloud_logbook} successfully created on ownCloud"
+        )
+        path_owncloud_voevents = self.owncloud_client.mkdir(path_voevents)
+        self.logger.info(
+            f"Folder {path_owncloud_voevents} successfully created on ownCloud"
+        )
+
+        return path_owncloud_alert
+
     def process_alert(self, notice: bytes) -> None:
         """
         Process the alert and return a message.
@@ -74,14 +136,26 @@ class Consumer(KafkaConsumer):
         if score > 1:
             self.logger.info("Significant alert detected")
 
+            # save the notice on disk to transfer it to the celery worker
             path_notice = gw_alert.save_notice(self.gcn_stream.notice_path)
 
-            new_gwalert_on_slack(
+            self.logger.info(f"Notice saved at {path_notice}")
+
+            # Initialize ownCloud folders for this alert
+            owncloud_alert_url = self.init_owncloud_folders(gw_alert)
+
+            self.logger.info(f"Folder created on ownCloud, url: {owncloud_alert_url}")
+
+            # send a message to Slack with the alert information
+            new_alert_on_slack(
                 gw_alert,
+                build_gwalert_msg,
                 self.gcn_stream.slack_client,
                 channel=self.gw_alert_channel,
                 logger=self.logger,
             )
+
+            self.logger.info("Send gw alert to slack")
 
             path_output_tiling = Path(
                 f"{gw_alert.event_id}_gwemopt_tiling_{uuid.uuid4().hex}"
@@ -91,35 +165,46 @@ class Consumer(KafkaConsumer):
             )
 
             self.logger.info("Sending gwemopt task to celery worker")
-            task_tiling = gwemopt_task.delay(
-                self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_tiling"],
-                self.gcn_stream.gcn_config["GWEMOPT"]["tiling_nb_tiles"],
-                self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
-                str(path_notice),
-                str(path_output_tiling),
-                gw_alert.BBH_threshold,
-                gw_alert.Distance_threshold,
-                gw_alert.ErrorRegion_threshold,
-            )
 
-            self.logger.info(
-                f"Gwemopt launched for tiling telescopes with ID: {task_tiling.id}"
-            )
+            # run two gwemopt tasks, one for tiling and one for galaxy targeting
+            chord_tasks = [
+                gwemopt_task.s(
+                    self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_tiling"],
+                    self.gcn_stream.gcn_config["GWEMOPT"]["tiling_nb_tiles"],
+                    self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
+                    self.gw_alert_channel,
+                    self.gw_channel_id,
+                    self.gcn_stream.gcn_config["OWNCLOUD"],
+                    str(owncloud_alert_url),
+                    str(path_notice),
+                    str(path_output_tiling),
+                    self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
+                    gw_alert.BBH_threshold,
+                    gw_alert.Distance_threshold,
+                    gw_alert.ErrorRegion_threshold,
+                    GW_alert.ObservationStrategy.TILING.name,
+                ),
+                gwemopt_task.s(
+                    self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_galaxy"],
+                    self.gcn_stream.gcn_config["GWEMOPT"]["nb_galaxies"],
+                    self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
+                    self.gw_alert_channel,
+                    self.gw_channel_id,
+                    self.gcn_stream.gcn_config["OWNCLOUD"],
+                    str(owncloud_alert_url),
+                    str(path_notice),
+                    str(path_output_galaxy),
+                    self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
+                    gw_alert.BBH_threshold,
+                    gw_alert.Distance_threshold,
+                    gw_alert.ErrorRegion_threshold,
+                    GW_alert.ObservationStrategy.GALAXYTARGETING.name,
+                    self.gcn_stream.gcn_config["GWEMOPT"]["path_galaxy_catalog"],
+                    self.gcn_stream.gcn_config["GWEMOPT"]["galaxy_catalog"],
+                ),
+            ]
 
-            task_galaxy = gwemopt_task.delay(
-                self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_galaxy"],
-                self.gcn_stream.gcn_config["GWEMOPT"]["nb_galaxies"],
-                self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
-                str(path_notice),
-                str(path_output_galaxy),
-                gw_alert.BBH_threshold,
-                gw_alert.Distance_threshold,
-                gw_alert.ErrorRegion_threshold,
-            )
-
-            self.logger.info(
-                f"Gwemopt launched for galaxy targeting telescopes with ID: {task_galaxy.id}"
-            )
+            chord(chord_tasks)(gwemopt_post_task.s())
 
     def start_poll_loop(
         self, interval_between_polls: int = 1, max_retries: int = 120

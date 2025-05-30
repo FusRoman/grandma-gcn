@@ -11,8 +11,9 @@ secret = "tata"
 topics = ["igwn.gwalert"]
 
 [PATH]
-log_path = "gcn_stream.log"
+gcn_stream_log_path = "gcn_stream.log"
 notice_path = "notices"
+celery_task_log_path = "gwemopt_task"
 
 [Threshold]
 BBH_proba = 0.5       # between 0 and 1
@@ -21,10 +22,18 @@ Size_region_cut = 500 # in deg²
 
 [Slack]
 gw_alert_channel = "#test_gwalerts"
+gw_alert_channel_id = "fake_id"
 
 [GWEMOPT]
-telescopes_tiling = ["TCH","TRE","TCA","FZU-CTA-N","FZU-Auger"]
-tiling_nb_tiles = [10,10,10,15,15]
+telescopes_tiling = ["TCH", "TRE", "TCA", "FZU-CTA-N", "FZU-Auger"]
+tiling_nb_tiles = [10, 10, 10, 15, 15]
 telescopes_galaxy = ["KAO"]
 nb_galaxies = [10]
 nside_flat = 64
+path_galaxy_catalog = "catalogs/"
+galaxy_catalog = "mangrove"
+
+[OWNCLOUD]
+username = "test_user"
+password = "test_password"
+base_url = "https://owncloud.example.com"

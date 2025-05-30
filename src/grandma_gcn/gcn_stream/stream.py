@@ -29,7 +29,7 @@ class GCNStream:
         self._gcn_config = load_gcn_config(self.path_config, logger=self.logger)
 
         # ensure log path exists
-        logfile = Path(self._gcn_config["PATH"]["log_path"])
+        logfile = Path(self._gcn_config["PATH"]["gcn_stream_log_path"])
         if not logfile.parent.exists():
             logfile.parent.mkdir(parents=True, exist_ok=True)
 

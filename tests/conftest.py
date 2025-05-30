@@ -7,8 +7,12 @@ from grandma_gcn.gcn_stream.gw_alert import GW_alert
 
 
 @pytest.fixture(autouse=True)
-def set_fake_slack_token(monkeypatch):
-    monkeypatch.setenv("FINK_SLACK_TOKEN", "fake-token-for-tests")
+def set_fake_slack_token(monkeypatch, request):
+    if "e2e" in request.keywords:
+        yield
+    else:
+        monkeypatch.setenv("FINK_SLACK_TOKEN", "fake-token-for-tests")
+        yield
 
 
 @pytest.fixture
@@ -77,3 +81,15 @@ def S241102_update(
 ) -> GW_alert:
     bytes_notice = open_notice_file(path_tests, "S241102br-update.json")
     return GW_alert(bytes_notice, 0.5, 100, 100)
+
+
+@pytest.fixture
+def owncloud_client(gcn_config_path, logger):
+    """
+    Fixture to create an instance of OwncloudClient
+    """
+    from grandma_gcn.worker.owncloud_client import OwncloudClient
+    from grandma_gcn.gcn_stream.stream import load_gcn_config
+
+    config = load_gcn_config(gcn_config_path, logger=logger)
+    return OwncloudClient(config.get("OWNCLOUD"))

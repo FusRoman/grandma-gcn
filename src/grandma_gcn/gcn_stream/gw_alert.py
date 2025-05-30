@@ -518,6 +518,40 @@ class GW_alert:
         TILING = "Tiling"
         GALAXYTARGETING = "Galaxy targeting"
 
+        @classmethod
+        def from_string(cls, strategy: str) -> Self:
+            """
+            Convert a string to an ObservationStrategy enum value
+
+            Parameters
+            ----------
+            strategy : str
+                the observation strategy string
+
+            Returns
+            -------
+            ObservationStrategy
+                the corresponding ObservationStrategy enum value
+            """
+            return cls[strategy] if strategy in cls.__members__ else None
+
+        def to_emoji(self) -> str:
+            """
+            Convert the observation strategy to an emoji
+
+            Returns
+            -------
+            str
+                the emoji corresponding to the observation strategy
+            """
+            match self:
+                case self.TILING:
+                    return "🧱"
+                case self.GALAXYTARGETING:
+                    return "🌌"
+                case _:
+                    return "❓"
+
     def run_observation_plan(
         self,
         telescope_list: list[str],
