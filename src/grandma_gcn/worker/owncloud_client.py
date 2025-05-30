@@ -8,28 +8,25 @@ from requests.auth import HTTPBasicAuth
 
 class OwncloudClient:
     def __init__(self, config: dict[str, Any]) -> None:
-        self.config = config
+        self.owncloud_config: dict[str, Any] = config
         self.logger = logging.getLogger("grandma_gcn.owncloud")
 
     @property
-    def owncloud_config(self) -> dict[str, Any]:
-        owncloud_config = self.config.get("OWNCLOUD")
-        if not owncloud_config:
-            raise ValueError(
-                "OWNCLOUD configuration not found in the config.toml. Please add a [OWNCLOUD] section with the following keys: 'base_url', 'username', 'password'."
-            )
-        return owncloud_config
-
-    @property
     def username(self) -> str:
+        if "username" not in self.owncloud_config:
+            raise ValueError("Username not found in ownCloud configuration.")
         return self.owncloud_config.get("username")
 
     @property
     def password(self) -> str:
+        if "password" not in self.owncloud_config:
+            raise ValueError("Password not found in ownCloud configuration.")
         return self.owncloud_config.get("password")
 
     @property
     def base_url(self) -> str:
+        if "base_url" not in self.owncloud_config:
+            raise ValueError("Base URL not found in ownCloud configuration.")
         return URL(self.owncloud_config.get("base_url"))
 
     def mkdir(self, folder_path: str) -> URL:
@@ -63,16 +60,16 @@ class OwncloudClient:
         self.logger.info(f"Directory {folder_path} created successfully.")
         return folder_path
 
-    def put_file(self, file_path: Path, url: URL, owncloud_filename: str) -> URL:
+    def put_data(self, data: bytes, url: URL, owncloud_filename: str) -> URL:
         """
-        Upload a file to ownCloud.
+        Upload data to ownCloud.
 
         Parameters
         ----------
-        file_path : Path
-            The local path of the file to upload.
+        data : bytes
+            The data to upload.
         url : URL
-            The url of the directory in ownCloud where the file will be uploaded.
+            The URL of the directory in ownCloud where the file will be uploaded.
         owncloud_filename : str
             The name of the file in ownCloud.
 
@@ -87,9 +84,6 @@ class OwncloudClient:
             If the file upload fails.
         """
         url_file = url / owncloud_filename
-        with open(file_path, "rb") as f:
-            data = f.read()
-
         response = requests.put(
             url_file,
             data=data,
@@ -102,3 +96,46 @@ class OwncloudClient:
             f"File {owncloud_filename} uploaded successfully to {url_file}"
         )
         return url_file
+
+    def put_file(self, file_path: Path, url: URL, owncloud_filename: str) -> URL:
+        """
+        Upload a file to ownCloud.
+
+        Parameters
+        ----------
+        file_path : Path
+            The local path of the file to upload.
+        url : URL
+            The URL of the directory in ownCloud where the file will be uploaded.
+        owncloud_filename : str
+            The name of the file in ownCloud.
+
+        Returns
+        -------
+        URL
+            The URL of the uploaded file in ownCloud.
+        """
+        with open(file_path, "rb") as f:
+            data = f.read()
+        return self.put_data(data, url, owncloud_filename)
+
+    def get_url_subpart(self, url: URL, nb_part: int) -> str:
+        """
+        Get a subpart of the URL.
+
+        Parameters
+        ----------
+        url : URL
+            The URL to get the subpart from.
+        nb_part : int
+            The number of parts to return from the URL.
+
+        Returns
+        -------
+        str
+            The subpart of the URL.
+        """
+        if nb_part < 1:
+            return ""
+        segments = url.parts
+        return "/".join(segments[-nb_part:]) if nb_part <= len(segments) else str(url)

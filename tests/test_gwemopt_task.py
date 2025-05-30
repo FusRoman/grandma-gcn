@@ -173,7 +173,7 @@ def test_init_gwemopt_S241102_update(S241102_update: GW_alert):
 
 
 @pytest.mark.usefixtures("tmp_path")
-def test_gwemopt_task_celery(tmp_path, S241102_update):
+def test_gwemopt_task_celery(mocker, tmp_path, S241102_update):
 
     # Create a temporary directory for saving notices
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -188,6 +188,9 @@ def test_gwemopt_task_celery(tmp_path, S241102_update):
         BBH_threshold = 0.5
         Distance_threshold = 500
         ErrorRegion_threshold = 500
+
+        mock_owncloud_mkdir_request = mocker.patch("requests.request")
+        mock_owncloud_mkdir_request.return_value.status_code = 201
 
         # Patch Observation_plan_multiple pour éviter le calcul lourd
         with patch(
@@ -209,6 +212,12 @@ def test_gwemopt_task_celery(tmp_path, S241102_update):
                         nside,
                         "#test_channel",
                         "CHANNELID",
+                        {
+                            "username": "test_user",
+                            "password": "test_pass",
+                            "base_url": "https://owncloud.example.com",
+                        },
+                        "https://owncloud.example.com/S241102br/GWEMOPT/UPDATE_fixeduuidhex",
                         str(notice_path),
                         str(path_output),
                         str(tmp_path),
@@ -241,39 +250,44 @@ def test_process_alert_calls(mocker):
         )
 
         mock_owncloud_mkdir_request = mocker.patch("requests.request")
-        mock_owncloud_mkdir_request.return_value.status_code = (
-            201  # Mock successful directory creation
+        mock_owncloud_mkdir_request.return_value.status_code = 201
+
+        # Patch uuid.uuid4 pour retourner un objet avec .hex constant
+        class DummyUUID:
+            hex = "fixeduuidhex"
+
+        with patch("uuid.uuid4", return_value=DummyUUID()):
+            with patch(
+                "grandma_gcn.gcn_stream.gw_alert.Observation_plan_multiple"
+            ) as mock_obs_plan:
+                with patch(
+                    "grandma_gcn.slackbot.gw_message.open", create=True
+                ) as mock_open:
+                    with patch("slack_sdk.WebClient.files_upload_v2") as mock_upload:
+                        mock_upload.return_value = {
+                            "file": {"permalink_public": "https://fake_url"}
+                        }
+
+                        mock_open.return_value.__enter__.return_value = MagicMock()
+                        mock_obs_plan.return_value = (MagicMock(), MagicMock())
+
+                        consumer = Consumer(gcn_stream=mock_gcn_stream)
+                        consumer.process_alert(notice)
+
+        assert mock_obs_plan.call_count == 2
+        assert mock_post_msg_on_slack.call_count == 5
+        assert mock_open.call_count == 2
+        assert mock_upload.call_count == 2
+        assert "tiles_coverage_int.png" in str(mock_open.call_args_list[0][0])
+        assert (
+            mock_upload.call_args_list[0][1]["filename"]
+            == "coverage_S241102br_Tiling_map.png"
         )
 
-        with patch(
-            "grandma_gcn.gcn_stream.gw_alert.Observation_plan_multiple"
-        ) as mock_obs_plan:
-            with patch(
-                "grandma_gcn.slackbot.gw_message.open", create=True
-            ) as mock_open:
-                with patch("slack_sdk.WebClient.files_upload_v2") as mock_upload:
-                    mock_upload.return_value = {
-                        "file": {"permalink_public": "https://fake_url"}
-                    }
+        mock_owncloud_mkdir_request.call_count == 11
+        _, kwargs = mock_owncloud_mkdir_request.call_args
 
-                    mock_open.return_value.__enter__.return_value = MagicMock()
-                    mock_obs_plan.return_value = (MagicMock(), MagicMock())
-
-                    consumer = Consumer(gcn_stream=mock_gcn_stream)
-                    consumer.process_alert(notice)
-
-    assert mock_obs_plan.call_count == 2
-    assert mock_post_msg_on_slack.call_count == 5
-    assert mock_open.call_count == 2
-    assert mock_upload.call_count == 2
-    assert "tiles_coverage_int.png" in str(mock_open.call_args_list[0][0])
-    assert (
-        mock_upload.call_args_list[0][1]["filename"]
-        == "coverage_S241102br_Tiling_map.png"
-    )
-
-    mock_owncloud_mkdir_request.assert_called_once()
-    _, kwargs = mock_owncloud_mkdir_request.call_args
-
-    assert kwargs["method"] == "MKCOL"
-    assert kwargs["url"] == URL("https://owncloud.example.com/Candidates/GW/S241102br")
+        assert kwargs["method"] == "MKCOL"
+        assert kwargs["url"] == URL(
+            "https://owncloud.example.com/S241102br/GWEMOPT/UPDATE_fixeduuidhex/GALAXYTARGETING/plots"
+        )

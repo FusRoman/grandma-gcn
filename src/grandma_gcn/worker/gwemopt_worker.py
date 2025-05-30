@@ -1,5 +1,7 @@
 from pathlib import Path
+from typing import Any
 from fink_utils.slack_bot.bot import init_slackbot
+from yarl import URL
 
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.slackbot.gw_message import (
@@ -16,6 +18,8 @@ from astropy.time import Time
 
 from grandma_gcn.worker.gwemopt_init import GalaxyCatalog, init_gwemopt
 from contextlib import redirect_stdout, redirect_stderr
+
+from grandma_gcn.worker.owncloud_client import OwncloudClient
 
 
 def setup_task_logger(
@@ -176,6 +180,38 @@ def table_to_custom_ascii(telescope, table):
     return "\n".join(lines)
 
 
+def push_gwemopt_product_on_owncloud(
+    owncloud_client: OwncloudClient,
+    path_gwemopt: Path,
+    owncloud_url: URL,
+    pattern: str = "*.png",
+):
+    """
+    Push the gwemopt product to ownCloud.
+
+    Parameters
+    ----------
+    owncloud_client : OwncloudClient
+        The ownCloud client to use for uploading files.
+    path_gwemopt : Path
+        The local path where the gwemopt product is stored.
+    owncloud_url : URL
+        The URL of the ownCloud instance where the product will be uploaded.
+    pattern : str
+        The pattern to match files to upload. Default is "*.png".
+    """
+    list_plot_path = path_gwemopt.glob(pattern)
+    for f in list_plot_path:
+        owncloud_filename = f.name
+        owncloud_client.put_file(f, owncloud_url, owncloud_filename)
+        owncloud_client.logger.info(
+            f"File {owncloud_filename} successfully uploaded to {owncloud_url}"
+        )
+    owncloud_client.logger.info(
+        f"All gwemopt products successfully uploaded to {owncloud_url}"
+    )
+
+
 @celery.task(name="gwemopt_task")
 def gwemopt_task(
     telescopes: list[str],
@@ -183,6 +219,8 @@ def gwemopt_task(
     nside: int,
     slack_channel: str,
     channel_id: str,
+    owncloud_config: dict[str, Any],
+    owncloud_gwemopt_url: str,
     path_notice: str,
     path_output: str,
     path_log: str,
@@ -209,6 +247,8 @@ def gwemopt_task(
     channel_id : str
         The Slack channel ID to send the notification to.
         Different from slack_channel, this is the ID used by the Slack API.
+    owncloud_gwemopt_url : str
+        The URL for the ownCloud instance where the results will be stored.
     path_output : str
         Path to the output directory.
     path_notice : str
@@ -224,13 +264,25 @@ def gwemopt_task(
     galaxy_catalog : str
         The galaxy catalog to use.
     """
-    obs_strategy = GW_alert.ObservationStrategy.from_string(obs_strategy)
+
+    # Initialize the ownCloud client and URL
+    owncloud_client = OwncloudClient(owncloud_config)
+    owncloud_gwemopt_url = URL(owncloud_gwemopt_url)
+
+    obs_strategy: GW_alert.ObservationStrategy = (
+        GW_alert.ObservationStrategy.from_string(obs_strategy)
+    )
     if obs_strategy == GW_alert.ObservationStrategy.GALAXYTARGETING and (
         path_galaxy_catalog is None or galaxy_catalog is None
     ):
         raise ValueError(
             "Observation strategy is set to GALAXYTARGETING but no galaxy catalog path or galaxy catalog provided."
         )
+
+    alert_url_subpart = owncloud_client.get_url_subpart(owncloud_gwemopt_url, 3)
+    obs_strategy_owncloud_path = alert_url_subpart + f"/{obs_strategy.name}"
+    # create specific observation strategy owncloud folder
+    obs_strategy_owncloud_url_folder = owncloud_client.mkdir(obs_strategy_owncloud_path)
 
     start_task = Time.now()
     task_id = current_task.request.id
@@ -262,6 +314,7 @@ def gwemopt_task(
 
                 worker_slack_client = init_slackbot(logger)
 
+                # Send a message to Slack to inform that a gwemopt task is starting
                 new_alert_on_slack(
                     gw_alert,
                     build_gwemopt_message,
@@ -285,29 +338,47 @@ def gwemopt_task(
                     path_galaxy_catalog=path_galaxy_catalog,
                     galaxy_catalog=galaxy_catalog,
                 )
+                print("Galaxies table:", galaxy)
 
-                print(f"Tiles: {tiles}")
+                # create the owncloud folder for the gwemopt plots and data files
+                logger.info("Pushing gwemopt products to ownCloud...")
+                plots_owncloud_url_folder = owncloud_client.mkdir(
+                    obs_strategy_owncloud_path + "/plots"
+                )
+                push_gwemopt_product_on_owncloud(
+                    owncloud_client,
+                    output_path,
+                    plots_owncloud_url_folder,
+                    pattern="*.png",
+                )
 
-                print()
-                print()
+                logger.info("Successfully pushed plots to ownCloud.")
 
-                print(f"Galaxy: {galaxy}")
+                push_gwemopt_product_on_owncloud(
+                    owncloud_client,
+                    output_path,
+                    plots_owncloud_url_folder,
+                    pattern="*.dat",
+                )
 
-                # import pickle
+                logger.info("Successfully pushed data files to ownCloud.")
 
-                # with open(output_path / "tiles.pickle", "wb") as f:
-                #     pickle.dump(tiles, f)
+                # Upload the tiles table in custom ASCII format to ownCloud
+                for k, v in tiles.items():
+                    gwemopt_ascii_tiles = table_to_custom_ascii(k, v)
+                    owncloud_client.put_data(
+                        data=gwemopt_ascii_tiles.encode("utf-8"),
+                        url=obs_strategy_owncloud_url_folder,
+                        owncloud_filename=f"tiles_{k}.txt",
+                    )
 
-                # with open(output_path / "galaxy.pickle", "wb") as f:
-                #     pickle.dump(galaxy, f)
-
-                _ = {k: table_to_custom_ascii(k, v) for k, v in tiles.items()}
-
-                # with open(output_path / "ascii_res.pickle", "wb") as f:
-                #     pickle.dump(ascii_results, f)
+                logger.info(
+                    "Tiles table converted to custom ASCII format and uploaded to ownCloud."
+                )
 
                 logger.info("GW_alert successfully processed.")
 
+                # Post the coverage map on Slack
                 permalink = post_image_on_slack(
                     worker_slack_client,
                     filepath=output_path / "tiles_coverage_int.png",
@@ -320,6 +391,7 @@ def gwemopt_task(
                     f"Coverage map posted on slack, permalink for coverage map: {permalink}"
                 )
 
+                # Post the gwemopt result message on Slack
                 new_alert_on_slack(
                     gw_alert,
                     build_gwemopt_results_message,

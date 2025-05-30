@@ -5,22 +5,6 @@ from yarl import URL
 from grandma_gcn.worker.owncloud_client import OwncloudClient
 
 
-@pytest.fixture
-def owncloud_config():
-    return {
-        "OWNCLOUD": {
-            "base_url": "https://owncloud.example.com",
-            "username": "test_user",
-            "password": "test_password",
-        }
-    }
-
-
-@pytest.fixture
-def owncloud_client(owncloud_config):
-    return OwncloudClient(owncloud_config)
-
-
 def test_owncloud_client_properties(owncloud_client):
     assert owncloud_client.username == "test_user"
     assert owncloud_client.password == "test_password"
@@ -135,3 +119,33 @@ def test_owncloud_put_file_url_type(owncloud_client: OwncloudClient):
             )
             called_url = mock_request.call_args[0][0]
             assert isinstance(called_url, URL)
+
+
+def test_get_url_subpart_basic(owncloud_client: OwncloudClient):
+    url = URL("https://owncloud.example.com/folder/subfolder/file.txt")
+    result = owncloud_client.get_url_subpart(url, 2)
+    assert result == "subfolder/file.txt"
+
+
+def test_get_url_subpart_full_url_if_too_many_parts(owncloud_client: OwncloudClient):
+    url = URL("https://owncloud.example.com/folder/subfolder/file.txt")
+    result = owncloud_client.get_url_subpart(url, 10)
+    assert result == str(url)
+
+
+def test_get_url_subpart_one_part(owncloud_client: OwncloudClient):
+    url = URL("https://owncloud.example.com/folder/subfolder/file.txt")
+    result = owncloud_client.get_url_subpart(url, 1)
+    assert result == "file.txt"
+
+
+def test_get_url_subpart_zero_part(owncloud_client: OwncloudClient):
+    url = URL("https://owncloud.example.com/folder/subfolder/file.txt")
+    result = owncloud_client.get_url_subpart(url, 0)
+    assert result == ""
+
+
+def test_get_url_subpart_exact_parts(owncloud_client: OwncloudClient):
+    url = URL("https://owncloud.example.com/folder/subfolder/file.txt")
+    result = owncloud_client.get_url_subpart(url, len(url.parts))
+    assert result == "/".join(url.parts)

@@ -258,10 +258,10 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
             saved_notice = json.load(f)
         assert saved_notice["superevent_id"] == "S241102br"  # Example assertion
 
-        mock_owncloud_mkdir_request.assert_called_once()
+        assert mock_owncloud_mkdir_request.call_count == 7
         _, kwargs = mock_owncloud_mkdir_request.call_args
 
         assert kwargs["method"] == "MKCOL"
         assert kwargs["url"] == URL(
-            "https://owncloud.example.com/Candidates/GW/S241102br"
+            "https://owncloud.example.com/Candidates/GW/S241102br/VOEVENTS"
         )

@@ -4,6 +4,8 @@ from gcn_kafka import Consumer as KafkaConsumer
 import logging
 import uuid
 
+from yarl import URL
+
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.slackbot.gw_message import build_gwalert_msg, new_alert_on_slack
 from grandma_gcn.worker.gwemopt_worker import gwemopt_post_task, gwemopt_task
@@ -21,7 +23,7 @@ class Consumer(KafkaConsumer):
             client_secret=gcn_stream.gcn_config["CLIENT"]["secret"],
         )
 
-        self.owncloud_client = OwncloudClient(gcn_stream.gcn_config)
+        self.owncloud_client = OwncloudClient(gcn_stream.gcn_config.get("OWNCLOUD"))
 
         self.gcn_stream = gcn_stream
 
@@ -57,6 +59,61 @@ class Consumer(KafkaConsumer):
             p.offset = 0
         consumer.assign(partitions)
 
+    def init_owncloud_folders(self, gw_alert: GW_alert) -> URL:
+        """
+        Initialize the ownCloud folders for the given GW alert.
+
+        Parameters
+        ----------
+        gw_alert: The GW alert object containing event information.
+
+        Returns
+        -------
+        URL: The URL of the alert folder created on ownCloud.
+        """
+        path_gw_alert = "Candidates/GW/{}".format(gw_alert.event_id)
+        # create a new folder on ownCloud for this alert
+        path_owncloud_gw = self.owncloud_client.mkdir(path_gw_alert)
+
+        self.logger.info(f"Folder {path_owncloud_gw} successfully created on ownCloud")
+        path_gwemopt = path_gw_alert + "/GWEMOPT"
+        path_images = path_gw_alert + "/IMAGES"
+        path_knc_images = path_gw_alert + "/KNC_IMAGES"
+        path_logbook = path_gw_alert + "/LOGBOOK"
+        path_voevents = path_gw_alert + "/VOEVENTS"
+
+        # create subfolders for gwemopt, images, knc_images, logbook and voevents
+        path_owncloud_gwemopt = self.owncloud_client.mkdir(path_gwemopt)
+        self.logger.info(
+            f"Folder {path_owncloud_gwemopt} successfully created on ownCloud"
+        )
+
+        # create subfolder for the alert type where the gwemopt products will be stored
+        path_alert = path_gwemopt + f"/{gw_alert.event_type.value}_{uuid.uuid4().hex}"
+        path_owncloud_alert = self.owncloud_client.mkdir(path_alert)
+        self.logger.info(
+            f"Folder {path_owncloud_alert} successfully created on ownCloud"
+        )
+
+        path_owncloud_images = self.owncloud_client.mkdir(path_images)
+        self.logger.info(
+            f"Folder {path_owncloud_images} successfully created on ownCloud"
+        )
+        path_owncloud_knc_images = self.owncloud_client.mkdir(path_knc_images)
+        self.logger.info(
+            f"Folder {path_owncloud_knc_images} successfully created on ownCloud"
+        )
+        path_owncloud_logbook = self.owncloud_client.mkdir(path_logbook)
+        self.logger.info(
+            f"Folder {path_owncloud_logbook} successfully created on ownCloud"
+        )
+        path_owncloud_voevents = self.owncloud_client.mkdir(path_voevents)
+        self.logger.info(
+            f"Folder {path_owncloud_voevents} successfully created on ownCloud"
+        )
+
+        return path_owncloud_alert
+
     def process_alert(self, notice: bytes) -> None:
         """
         Process the alert and return a message.
@@ -84,12 +141,10 @@ class Consumer(KafkaConsumer):
 
             self.logger.info(f"Notice saved at {path_notice}")
 
-            # create a new folder on ownCloud for this alert
-            path_owncloud_gw = self.owncloud_client.mkdir(
-                "Candidates/GW/{}".format(gw_alert.event_id)
-            )
+            # Initialize ownCloud folders for this alert
+            owncloud_alert_url = self.init_owncloud_folders(gw_alert)
 
-            self.logger.info(f"Folder created on ownCloud, url: {path_owncloud_gw}")
+            self.logger.info(f"Folder created on ownCloud, url: {owncloud_alert_url}")
 
             # send a message to Slack with the alert information
             new_alert_on_slack(
@@ -119,6 +174,8 @@ class Consumer(KafkaConsumer):
                     self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
                     self.gw_alert_channel,
                     self.gw_channel_id,
+                    self.gcn_stream.gcn_config["OWNCLOUD"],
+                    str(owncloud_alert_url),
                     str(path_notice),
                     str(path_output_tiling),
                     self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
@@ -133,6 +190,8 @@ class Consumer(KafkaConsumer):
                     self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
                     self.gw_alert_channel,
                     self.gw_channel_id,
+                    self.gcn_stream.gcn_config["OWNCLOUD"],
+                    str(owncloud_alert_url),
                     str(path_notice),
                     str(path_output_galaxy),
                     self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],

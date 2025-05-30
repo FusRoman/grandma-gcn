@@ -92,4 +92,4 @@ def owncloud_client(gcn_config_path, logger):
     from grandma_gcn.gcn_stream.stream import load_gcn_config
 
     config = load_gcn_config(gcn_config_path, logger=logger)
-    return OwncloudClient(config)
+    return OwncloudClient(config.get("OWNCLOUD"))
