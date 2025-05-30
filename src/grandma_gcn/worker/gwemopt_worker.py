@@ -329,7 +329,7 @@ def gwemopt_task(
                     telescopes=telescopes,
                 )
 
-                tiles, galaxy = run_gwemopt(
+                tiles, _ = run_gwemopt(
                     gw_alert,
                     telescopes,
                     nb_tiles,
@@ -340,12 +340,6 @@ def gwemopt_task(
                     path_galaxy_catalog=path_galaxy_catalog,
                     galaxy_catalog=galaxy_catalog,
                 )
-                print("Galaxies table:", galaxy)
-
-                import pickle
-
-                with open(output_path / "galaxies_table.pickle", "wb") as f:
-                    pickle.dump(galaxy, f)
 
                 # create the owncloud folder for the gwemopt plots and data files
                 logger.info("Pushing gwemopt products to ownCloud...")
