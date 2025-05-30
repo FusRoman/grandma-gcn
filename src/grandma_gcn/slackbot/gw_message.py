@@ -305,7 +305,7 @@ def build_gwemopt_results_message(
     obs_strategy: GW_alert.ObservationStrategy,
     telescopes: list[str],
     execution_time: float,
-    slack_plot_permalink: str,
+    slack_plot_permalink: str | None,
 ) -> Message:
     msg = Message()
     msg.add_header("🗺️ GWEMOPT processing finished for {}".format(gw_alert.event_id))
@@ -334,7 +334,9 @@ def build_gwemopt_results_message(
         .add_elements(
             MarkdownText(
                 "🧭 *Coverage Map:*\n<{}|View image>".format(slack_plot_permalink)
-            ),
+            )
+            if slack_plot_permalink
+            else MarkdownText("🧭 *Coverage Map:*\nNo coverage map available.")
         )
     )
 

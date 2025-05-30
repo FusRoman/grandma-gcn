@@ -1,7 +1,9 @@
 from pathlib import Path
+import shutil
 from typing import Any
 from fink_utils.slack_bot.bot import init_slackbot
 from yarl import URL
+from astropy.table import Table
 
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.slackbot.gw_message import (
@@ -74,7 +76,7 @@ def run_gwemopt(
     logger: logging.Logger,
     path_galaxy_catalog: Path | None,
     galaxy_catalog: GalaxyCatalog | None,
-) -> None:
+) -> tuple[Table, Any]:
     """
     Run the gwemopt observation plan.
 
@@ -340,6 +342,11 @@ def gwemopt_task(
                 )
                 print("Galaxies table:", galaxy)
 
+                import pickle
+
+                with open(output_path / "galaxies_table.pickle", "wb") as f:
+                    pickle.dump(galaxy, f)
+
                 # create the owncloud folder for the gwemopt plots and data files
                 logger.info("Pushing gwemopt products to ownCloud...")
                 plots_owncloud_url_folder = owncloud_client.mkdir(
@@ -378,14 +385,20 @@ def gwemopt_task(
 
                 logger.info("GW_alert successfully processed.")
 
-                # Post the coverage map on Slack
-                permalink = post_image_on_slack(
-                    worker_slack_client,
-                    filepath=output_path / "tiles_coverage_int.png",
-                    filetitle=f"{gw_alert.event_id} {obs_strategy.value} Coverage Map",
-                    filename=f"coverage_{gw_alert.event_id}_{obs_strategy.value}_map.png",
-                    channel_id=channel_id,
-                )
+                try:
+                    # Post the coverage map on Slack
+                    permalink = post_image_on_slack(
+                        worker_slack_client,
+                        filepath=output_path / "tiles_coverage_int.png",
+                        filetitle=f"{gw_alert.event_id} {obs_strategy.value} Coverage Map",
+                        filename=f"coverage_{gw_alert.event_id}_{obs_strategy.value}_map.png",
+                        channel_id=channel_id,
+                    )
+                except FileNotFoundError as e:
+                    logger.error(
+                        f"Coverage map file not found: {e}. Skipping posting map on Slack."
+                    )
+                    permalink = None
 
                 logger.info(
                     f"Coverage map posted on slack, permalink for coverage map: {permalink}"
@@ -411,9 +424,28 @@ def gwemopt_task(
         logger.error(f"An error occurred while processing the task: {e}")
         raise e
 
+    return str(path_notice), str(output_path)
+
 
 @celery.task(name="gwemopt_post_task")
 def gwemopt_post_task(results):
-    # results est une liste des retours de chaque gwemopt_task
-    print("Post-traitement exécuté après les deux tâches.")
-    print("Résultats:", results)
+    """
+    Task to clean up after the gwemopt task has completed.
+    This task removes the notice file and the output directory created by the gwemopt task.
+
+    Parameters
+    ----------
+    results : tuple[str, str]
+        A tuple containing the path to the notice file and the path to the output directory.
+    """
+
+    res_tiling, _ = results
+
+    path_notice = Path(res_tiling[0])
+    # remove the notice file after processing
+    path_notice.unlink()
+
+    folder_gwemopt_output_tiling = Path(res_tiling[1])
+
+    if folder_gwemopt_output_tiling.exists() and folder_gwemopt_output_tiling.is_dir():
+        shutil.rmtree(folder_gwemopt_output_tiling)
