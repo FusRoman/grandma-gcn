@@ -1,0 +1,38 @@
+name: pre-commit
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pre-commit-checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11" # Choisis ta version de Python
+
+      - name: Install system dependencies (for pylint)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pylint
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+
+      - name: Fail if files were modified
+        run: |
+          if ! git diff --quiet; then
+            echo "pre-commit hooks modified files. Please run pre-commit locally and commit the changes."
+            git diff
+            exit 1
+          fi
