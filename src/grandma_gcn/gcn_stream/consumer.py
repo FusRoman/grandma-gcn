@@ -7,6 +7,7 @@ import uuid
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.slackbot.gw_message import build_gwalert_msg, new_alert_on_slack
 from grandma_gcn.worker.gwemopt_worker import gwemopt_post_task, gwemopt_task
+from grandma_gcn.worker.owncloud_client import OwncloudClient
 
 
 class Consumer(KafkaConsumer):
@@ -19,6 +20,8 @@ class Consumer(KafkaConsumer):
             client_id=gcn_stream.gcn_config["CLIENT"]["id"],
             client_secret=gcn_stream.gcn_config["CLIENT"]["secret"],
         )
+
+        self.owncloud_client = OwncloudClient(gcn_stream.gcn_config)
 
         self.gcn_stream = gcn_stream
 
@@ -78,6 +81,14 @@ class Consumer(KafkaConsumer):
 
             path_notice = gw_alert.save_notice(self.gcn_stream.notice_path)
 
+            self.logger.info(f"Notice saved at {path_notice}")
+
+            path_owncloud_gw = self.owncloud_client.mkdir(
+                "Candidates/GW/{}".format(gw_alert.event_id)
+            )
+
+            self.logger.info(f"Folder created on ownCloud, url: {path_owncloud_gw}")
+
             new_alert_on_slack(
                 gw_alert,
                 build_gwalert_msg,
@@ -85,6 +96,8 @@ class Consumer(KafkaConsumer):
                 channel=self.gw_alert_channel,
                 logger=self.logger,
             )
+
+            self.logger.info("Send gw alert to slack")
 
             path_output_tiling = Path(
                 f"{gw_alert.event_id}_gwemopt_tiling_{uuid.uuid4().hex}"

@@ -5,6 +5,8 @@ import tempfile
 import pytest
 from unittest.mock import MagicMock
 
+from yarl import URL
+
 from grandma_gcn.gcn_stream.consumer import Consumer
 from grandma_gcn.gcn_stream.gcn_logging import init_logging
 from tests.test_gw_alert import open_notice_file
@@ -203,6 +205,11 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
         "grandma_gcn.slackbot.gw_message.post_msg_on_slack"
     )
 
+    mock_owncloud_mkdir_request = mocker.patch("requests.request")
+    mock_owncloud_mkdir_request.return_value.status_code = (
+        201  # Mock successful directory creation
+    )
+
     # Mock gwemopt_task.s to avoid running the real Celery task
     mock_gwemopt_task = mocker.patch(
         "grandma_gcn.gcn_stream.consumer.gwemopt_task", autospec=True
@@ -250,3 +257,11 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
         with open(saved_files[0], "r") as f:
             saved_notice = json.load(f)
         assert saved_notice["superevent_id"] == "S241102br"  # Example assertion
+
+        mock_owncloud_mkdir_request.assert_called_once()
+        _, kwargs = mock_owncloud_mkdir_request.call_args
+
+        assert kwargs["method"] == "MKCOL"
+        assert kwargs["url"] == URL(
+            "https://owncloud.example.com/Candidates/GW/S241102br"
+        )
