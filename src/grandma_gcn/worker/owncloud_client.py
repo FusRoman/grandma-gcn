@@ -63,7 +63,7 @@ class OwncloudClient:
         self.logger.info(f"Directory {folder_path} created successfully.")
         return folder_path
 
-    def put_file(self, file_path: Path, url: URL, owncloud_filename: str) -> None:
+    def put_file(self, file_path: Path, url: URL, owncloud_filename: str) -> URL:
         """
         Upload a file to ownCloud.
 
@@ -75,6 +75,11 @@ class OwncloudClient:
             The url of the directory in ownCloud where the file will be uploaded.
         owncloud_filename : str
             The name of the file in ownCloud.
+
+        Returns
+        -------
+        URL
+            The URL of the uploaded file in ownCloud.
 
         Raises
         ------
