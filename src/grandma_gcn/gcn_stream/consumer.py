@@ -79,16 +79,19 @@ class Consumer(KafkaConsumer):
         if score > 1:
             self.logger.info("Significant alert detected")
 
+            # save the notice on disk to transfer it to the celery worker
             path_notice = gw_alert.save_notice(self.gcn_stream.notice_path)
 
             self.logger.info(f"Notice saved at {path_notice}")
 
+            # create a new folder on ownCloud for this alert
             path_owncloud_gw = self.owncloud_client.mkdir(
                 "Candidates/GW/{}".format(gw_alert.event_id)
             )
 
             self.logger.info(f"Folder created on ownCloud, url: {path_owncloud_gw}")
 
+            # send a message to Slack with the alert information
             new_alert_on_slack(
                 gw_alert,
                 build_gwalert_msg,
@@ -108,6 +111,7 @@ class Consumer(KafkaConsumer):
 
             self.logger.info("Sending gwemopt task to celery worker")
 
+            # run two gwemopt tasks, one for tiling and one for galaxy targeting
             chord_tasks = [
                 gwemopt_task.s(
                     self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_tiling"],
