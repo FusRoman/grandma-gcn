@@ -316,6 +316,10 @@ def gwemopt_task(
                     channel_id=channel_id,
                 )
 
+                logger.info(
+                    f"Coverage map posted on slack, permalink for coverage map: {permalink}"
+                )
+
                 new_alert_on_slack(
                     gw_alert,
                     build_gwemopt_results_message,
@@ -328,6 +332,8 @@ def gwemopt_task(
                     telescopes=telescopes,
                     slack_plot_permalink=permalink,
                 )
+
+                logger.info("gwemopt post message successfully sent to Slack.")
 
     except Exception as e:
         logger.error(f"An error occurred while processing the task: {e}")

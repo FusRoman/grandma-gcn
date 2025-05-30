@@ -32,3 +32,8 @@ nb_galaxies = [10]
 nside_flat = 64
 path_galaxy_catalog = "catalogs/"
 galaxy_catalog = "mangrove"
+
+[OWNCLOUD]
+username = "test_user"
+password = "test_password"
+base_url = "https://owncloud.example.com"

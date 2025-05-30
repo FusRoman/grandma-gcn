@@ -16,6 +16,7 @@ dependencies = [
     "dotenv>=0.9.9",
     "gwemopt @ git+https://github.com/FusRoman/old_gwemopt@v1.1.0",
     "ligo-skymap>=2.4.0",
+    "yarl>=1.20.0",
 ]
 requires-python = ">=3.12"
 readme = "README.md"
