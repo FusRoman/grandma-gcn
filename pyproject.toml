@@ -1,7 +1,7 @@
 [project]
 name = "grandma-gcn"
 version = "0.1.0"
-description = "Default template for PDM package"
+description = "GRANDMA GCN Stream Processor"
 authors = [{ name = "Roman", email = "roman.lemontagner@gmail.com" }]
 dependencies = [
     "gcn-kafka>=0.3.3",
