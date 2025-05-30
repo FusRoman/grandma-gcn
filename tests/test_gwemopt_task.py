@@ -1,5 +1,7 @@
 import tempfile
 import logging
+
+from yarl import URL
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.gcn_stream.stream import load_gcn_config
 from grandma_gcn.worker.gwemopt_init import GalaxyCatalog, init_gwemopt
@@ -238,6 +240,11 @@ def test_process_alert_calls(mocker):
             "grandma_gcn.slackbot.gw_message.post_msg_on_slack"
         )
 
+        mock_owncloud_mkdir_request = mocker.patch("requests.request")
+        mock_owncloud_mkdir_request.return_value.status_code = (
+            201  # Mock successful directory creation
+        )
+
         with patch(
             "grandma_gcn.gcn_stream.gw_alert.Observation_plan_multiple"
         ) as mock_obs_plan:
@@ -264,3 +271,9 @@ def test_process_alert_calls(mocker):
         mock_upload.call_args_list[0][1]["filename"]
         == "coverage_S241102br_Tiling_map.png"
     )
+
+    mock_owncloud_mkdir_request.assert_called_once()
+    _, kwargs = mock_owncloud_mkdir_request.call_args
+
+    assert kwargs["method"] == "MKCOL"
+    assert kwargs["url"] == URL("https://owncloud.example.com/Candidates/GW/S241102br")
