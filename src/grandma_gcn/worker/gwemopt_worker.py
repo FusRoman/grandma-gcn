@@ -279,7 +279,7 @@ def gwemopt_task(
             "Observation strategy is set to GALAXYTARGETING but no galaxy catalog path or galaxy catalog provided."
         )
 
-    alert_url_subpart = owncloud_client.get_url_subpart(owncloud_gwemopt_url, 3)
+    alert_url_subpart = owncloud_client.get_url_subpart(owncloud_gwemopt_url, 5)
     obs_strategy_owncloud_path = alert_url_subpart + f"/{obs_strategy.name}"
     # create specific observation strategy owncloud folder
     obs_strategy_owncloud_url_folder = owncloud_client.mkdir(obs_strategy_owncloud_path)

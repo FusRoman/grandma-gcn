@@ -12,6 +12,7 @@ from pathlib import Path
 from grandma_gcn.worker.gwemopt_worker import gwemopt_task
 from tests.test_gw_alert import open_notice_file
 from grandma_gcn.worker.celery_app import celery
+from grandma_gcn.worker.owncloud_client import OwncloudClient
 
 
 @pytest.fixture(autouse=True)
@@ -271,8 +272,24 @@ def test_process_alert_calls(mocker):
                         mock_open.return_value.__enter__.return_value = MagicMock()
                         mock_obs_plan.return_value = (MagicMock(), MagicMock())
 
-                        consumer = Consumer(gcn_stream=mock_gcn_stream)
-                        consumer.process_alert(notice)
+                        # Patch la méthode mkdir de OwncloudClient
+                        with patch.object(
+                            OwncloudClient,
+                            "mkdir",
+                            autospec=True,
+                            wraps=OwncloudClient.mkdir,
+                        ) as spy_mkdir:
+                            consumer = Consumer(gcn_stream=mock_gcn_stream)
+                            consumer.process_alert(notice)
+
+                            # Vérifie que mkdir a été appelé avec le bon argument
+                            mkdir_args = [
+                                call.args[1] for call in spy_mkdir.call_args_list
+                            ]
+                            assert (
+                                "Candidates/GW/S241102br/GWEMOPT/UPDATE_fixeduuidhex/TILING"
+                                == mkdir_args[7]
+                            )
 
         assert mock_obs_plan.call_count == 2
         assert mock_post_msg_on_slack.call_count == 5
@@ -289,5 +306,5 @@ def test_process_alert_calls(mocker):
 
         assert kwargs["method"] == "MKCOL"
         assert kwargs["url"] == URL(
-            "https://owncloud.example.com/S241102br/GWEMOPT/UPDATE_fixeduuidhex/GALAXYTARGETING/plots"
+            "https://owncloud.example.com/Candidates/GW/S241102br/GWEMOPT/UPDATE_fixeduuidhex/GALAXYTARGETING/plots"
         )
