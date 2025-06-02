@@ -1,4 +1,16 @@
 services:
+  init_volume:
+    # This service initializes the volume with the correct permissions
+    # to ensure that the GCN stream can write to it.
+    # It runs only once and then exits.
+    image: busybox
+    env_file:
+      - .env
+    command: ["sh", "-c", "chown -R ${PROJECT_UID}:${PROJECT_GID} /shared-tmp"]
+    volumes:
+      - e2e_volume:/shared-tmp
+    restart: "no"
+
   gcn_stream:
     image: grandma_gcn_app
     env_file:
@@ -42,7 +54,5 @@ services:
       - e2e_volume:/shared-tmp
 
 volumes:
-  app_log:
-    name: "app_log_volume"
   e2e_volume:
     name: "e2e_volume"
