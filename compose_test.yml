@@ -19,7 +19,6 @@ services:
     depends_on:
       - celery_worker
     command: tail -F anything
-    # command: ["python" , "src/grandma_gcn/gcn_stream/stream.py", "--gcn-config-path", "gcn_stream_config.toml"]
 
   redis:
     image: redis:6.0.5
@@ -35,10 +34,11 @@ services:
     volumes:
       - ../grandma-gcn:/home/${USR}/code/
       - e2e_volume:/shared-tmp
-    entrypoint: [
-      "/bin/sh",
-      "-c",
-      "pip install --no-cache-dir -e /home/${USR}/code && exec python -m celery -A grandma_gcn.worker.celery_app worker --loglevel=DEBUG"
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "pip install --no-cache-dir -e /home/${USR}/code && exec python -m celery -A grandma_gcn.worker.celery_app worker --loglevel=DEBUG",
       ]
 
 volumes:
