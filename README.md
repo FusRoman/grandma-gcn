@@ -178,18 +178,6 @@ pytest
 - GW stream and OwnCloud credentials are configured via TOML files and environment variables.
 - See example configuration files in the `tests/` directory.
 
-## Contributing
-
-Contributions are welcome! Please open issues or pull requests on [GitHub](https://github.com/FusRoman/grandma-gcn).
-
-## License
-
-Distributed under the CeCILL-C License. See [LICENSE](LICENSE) for details.
-
-## Acknowledgments
-
-Developed as part of the GRANDMA collaboration.
-
 ## Alert Processing Pipeline
 
 The grandma-gcn package implements a modular and automated pipeline for handling gravitational wave (GW) alerts from ingestion to dissemination. Here is a detailed overview of the main steps:
@@ -251,3 +239,15 @@ Slack Notification
 ```
 
 This pipeline ensures that GW alerts are processed rapidly, observation strategies are generated and distributed, and all relevant stakeholders are notified in real time.
+
+## Contributing
+
+Contributions are welcome! Please open issues or pull requests on [GitHub](https://github.com/FusRoman/grandma-gcn).
+
+## License
+
+Distributed under the CeCILL-C License. See [LICENSE](LICENSE) for details.
+
+## Acknowledgments
+
+Developed as part of the GRANDMA collaboration.
