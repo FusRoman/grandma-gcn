@@ -7,12 +7,6 @@
 
 **grandma-gcn** is a Python package for processing, analyzing, and distributing gravitational wave (GW) alerts, designed for the GRANDMA collaboration. It provides tools to parse GW notices, generate observation strategies, and automate notifications and data sharing.
 
-## About NASA GCN
-
-This project is built around the [NASA Gamma-ray Coordinates Network (GCN)](https://gcn.nasa.gov/), which is a real-time system for distributing alerts and notices about astrophysical transients such as gamma-ray bursts (GRBs), gravitational wave events, and other multi-messenger phenomena.
-
-The new generation of GCN, known as **GCN over Kafka**, uses the [Apache Kafka](https://kafka.apache.org/) protocol to provide a scalable, robust, and low-latency message streaming service for astronomical alerts. This allows observatories and astronomers to subscribe to real-time streams of transient event notifications, enabling rapid follow-up and coordination across the global community. The grandma-gcn package is designed to interface directly with GCN over Kafka, making it easy to consume, process, and react to gravitational wave alerts as soon as they are published.
-
 ## Features
 
 - Parse and handle GW alerts (GCN, GraceDB, etc.)
@@ -239,6 +233,12 @@ Slack Notification
 ```
 
 This pipeline ensures that GW alerts are processed rapidly, observation strategies are generated and distributed, and all relevant stakeholders are notified in real time.
+
+## About NASA GCN
+
+This project is built around the [NASA Gamma-ray Coordinates Network (GCN)](https://gcn.nasa.gov/), which is a real-time system for distributing alerts and notices about astrophysical transients such as gamma-ray bursts (GRBs), gravitational wave events, and other multi-messenger phenomena.
+
+The new generation of GCN, known as **GCN over Kafka**, uses the [Apache Kafka](https://kafka.apache.org/) protocol to provide a scalable, robust, and low-latency message streaming service for astronomical alerts. This allows observatories and astronomers to subscribe to real-time streams of transient event notifications, enabling rapid follow-up and coordination across the global community. The grandma-gcn package is designed to interface directly with GCN over Kafka, making it easy to consume, process, and react to gravitational wave alerts as soon as they are published.
 
 ## Contributing
 
