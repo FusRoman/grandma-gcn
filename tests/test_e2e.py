@@ -7,6 +7,20 @@ from tests.test_gw_alert import open_notice_file
 
 @mark.e2e
 def test_e2e_grandma(mocker, logger):
+    """
+    End-to-end test for the GCNStream class in the grandma_gcn package.
+    This test simulates the processing of GCN notices from a Kafka topic,
+    ensuring that notices are correctly consumed, processed and then
+    removed from the disk by a celery post processing task.
+
+    It uses mocked messages to simulate the Kafka consumer behavior and
+    verifies that the notices are saved to a specified directory.
+
+    To run the e2e test, you need a the grandma-gcn configuration file
+    in toml format with the good secret in it, including
+    the kafka GCN id and secret, the slackbot token, the slack channel id where to send
+    the gwemopt plot as well as the owncloud username and password.
+    """
     from grandma_gcn.gcn_stream.stream import GCNStream
 
     # Simulate a message queue
