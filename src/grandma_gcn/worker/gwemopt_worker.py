@@ -223,6 +223,7 @@ def gwemopt_task(
     channel_id: str,
     owncloud_config: dict[str, Any],
     owncloud_gwemopt_url: str,
+    path_gw_alert: str,
     path_notice: str,
     path_output: str,
     path_log: str,
@@ -251,6 +252,8 @@ def gwemopt_task(
         Different from slack_channel, this is the ID used by the Slack API.
     owncloud_gwemopt_url : str
         The URL for the ownCloud instance where the results will be stored.
+    path_gw_alert : str
+        Path to the gw alert folder on OWNCLOUD.
     path_output : str
         Path to the output directory.
     path_notice : str
@@ -410,6 +413,7 @@ def gwemopt_task(
                     obs_strategy=obs_strategy,
                     telescopes=telescopes,
                     slack_plot_permalink=permalink,
+                    path_gw_alert=path_gw_alert,
                 )
 
                 logger.info("gwemopt post message successfully sent to Slack.")

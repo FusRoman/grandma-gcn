@@ -20,6 +20,8 @@ def test_e2e_grandma(mocker, logger):
     in toml format with the good secret in it, including
     the kafka GCN id and secret, the slackbot token, the slack channel id where to send
     the gwemopt plot as well as the owncloud username and password.
+
+    The owncloud url should be the WebDAV url of the owncloud instance.
     """
     from grandma_gcn.gcn_stream.stream import GCNStream
 
