@@ -219,6 +219,7 @@ def test_gwemopt_task_celery(mocker, tmp_path, S241102_update):
                             "base_url": "https://owncloud.example.com",
                         },
                         "https://owncloud.example.com/S241102br/GWEMOPT/UPDATE_fixeduuidhex",
+                        "Candidates/GW/S241102br/",
                         str(notice_path),
                         str(path_output),
                         str(tmp_path),

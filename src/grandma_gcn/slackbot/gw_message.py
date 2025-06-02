@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Any, Callable
 from fink_utils.slack_bot.msg_builder import Message
+from yarl import URL
 
 from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
@@ -23,6 +24,21 @@ from fink_utils.slack_bot.bot import post_msg_on_slack
 from slack_sdk import WebClient
 
 
+def get_grandma_owncloud_public_url() -> URL:
+    """
+    Get the GRANDMA OwnCloud URL.
+    This URL is used to access the GRANDMA OwnCloud instance.
+    This is not the WebDAV URL, but the public URL to access the files.
+    A grandma authentication is still required to access the folders and files
+
+    Returns
+    -------
+    str
+        The GRANDMA OwnCloud URL.
+    """
+    return URL("https://grandma-owncloud.lal.in2p3.fr/index.php/apps/files/?dir=/")
+
+
 def instruments_to_markdown(instruments: list[GW_alert.Instrument]) -> str:
     """
     Convert a list of instruments into a Markdown bullet list.
@@ -43,13 +59,15 @@ def instruments_to_markdown(instruments: list[GW_alert.Instrument]) -> str:
     return "\n".join(f"- {instrument.value}" for instrument in instruments)
 
 
-def build_gwalert_msg(gw_alert: GW_alert) -> Message:
+def build_gwalert_msg(gw_alert: GW_alert, path_gw_alert: str) -> Message:
     """
     Build a message for the GW alert.
     Parameters
     ----------
     gw_alert : GW_alert
         The GW alert object.
+    path_gw_alert : str
+        The path to the alert folder on OwnCloud.
     Returns
     -------
     Message
@@ -142,25 +160,23 @@ def build_gwalert_msg(gw_alert: GW_alert) -> Message:
         emoji=True,
     )
 
-    url_owncloud_event = "https://grandma-owncloud.lal.in2p3.fr/index.php/apps/files/?dir=/candidates/gw/{}".format(
-        gw_alert.event_id
-    )
-
+    # Public URL (meaning not the WebDAV url used to make the requests) for the OwnCloud event folder
+    url_owncloud_event = get_grandma_owncloud_public_url() / path_gw_alert
     owncloud_repo_button = URLButton(
         "OwnCloud - {}".format(gw_alert.event_id),
-        url_owncloud_event,
+        str(url_owncloud_event),
         emoji=True,
     )
 
     owncloud_repo_image_button = URLButton(
         "OwnCloud - Image",
-        url_owncloud_event + "/images",
+        str(url_owncloud_event / "IMAGES"),
         emoji=True,
     )
 
     owncloud_repo_photometry_button = URLButton(
         "OwnCloud - Photometry",
-        url_owncloud_event + "/logbook",
+        str(url_owncloud_event / "LOGBOOK"),
         emoji=True,
     )
 
@@ -306,7 +322,33 @@ def build_gwemopt_results_message(
     telescopes: list[str],
     execution_time: float,
     slack_plot_permalink: str | None,
+    path_gw_alert: str,
 ) -> Message:
+    """
+    Build a message for the GWEMOPT processing results.
+
+    Parameters
+    ----------
+    gw_alert : GW_alert
+        The GW alert object.
+    celery_task_id : int
+        The ID of the Celery task that processed the alert.
+    obs_strategy : GW_alert.ObservationStrategy
+        The observation strategy used for the processing.
+    telescopes : list[str]
+        List of telescopes involved in the gwemopt task.
+    execution_time : float
+        The total execution time of the processing task in seconds.
+    slack_plot_permalink : str | None
+        The public permalink to the coverage map image on Slack, if available.
+    path_gw_alert : str
+        The path to the alert folder on OwnCloud, used to link to the results.
+
+    Returns
+    -------
+    Message
+        The message object containing the results of the GWEMOPT processing.
+    """
     msg = Message()
     msg.add_header("🗺️ GWEMOPT processing finished for {}".format(gw_alert.event_id))
     msg.add_divider()
@@ -337,6 +379,19 @@ def build_gwemopt_results_message(
             )
             if slack_plot_permalink
             else MarkdownText("🧭 *Coverage Map:*\nNo coverage map available.")
+        )
+    )
+
+    # Public URL (meaning not the WebDAV url used to make the requests) for the OwnCloud event folder
+    url_owncloud_event = get_grandma_owncloud_public_url() / path_gw_alert
+    owncloud_repo_button = URLButton(
+        "OwnCloud - {}".format(gw_alert.event_id),
+        str(url_owncloud_event),
+        emoji=True,
+    )
+    msg.add_elements(
+        Action().add_elements(
+            owncloud_repo_button,
         )
     )
 

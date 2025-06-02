@@ -1,7 +1,7 @@
 [project]
 name = "grandma-gcn"
-version = "0.1.0"
-description = "GRANDMA GCN Stream Processor"
+version = "1.0.0"
+description = "Automated ingestion, analysis, and distribution of gravitational wave (GW) alerts for the GRANDMA collaboration. Provides real-time GCN/GraceDB alert processing, observation strategy generation (gwemopt), Slack and OwnCloud integration, and Celery-based automation."
 authors = [{ name = "Roman", email = "roman.lemontagner@gmail.com" }]
 dependencies = [
     "gcn-kafka>=0.3.3",
@@ -31,11 +31,7 @@ build-backend = "pdm.backend"
 distribution = true
 
 [project.optional-dependencies]
-test = [
-    "pytest>=8.3.3",
-    "pytest-mock>=3.14.0",
-    "pytest-cov>=6.1.1",
-]
+test = ["pytest>=8.3.3", "pytest-mock>=3.14.0", "pytest-cov>=6.1.1"]
 
 lint = ["black>=24.10.0", "pre-commit>=4.0.1", "pylint>=3.3.2"]
 
