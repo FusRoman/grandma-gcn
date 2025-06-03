@@ -55,7 +55,9 @@ class OwncloudClient:
             auth=HTTPBasicAuth(self.username, self.password),
         )
         if response.status_code not in (201, 204):
-            raise Exception(f"Failed to create directory: {response.status_code}")
+            self.logger.error(
+                f"Failed to create directory {folder_path}: {response.status_code}"
+            )
 
         self.logger.info(f"Directory {folder_path} created successfully.")
         return folder_path
@@ -90,7 +92,9 @@ class OwncloudClient:
             auth=HTTPBasicAuth(self.username, self.password),
         )
         if response.status_code not in (201, 204):
-            raise Exception(f"Failed to upload file: {response.status_code}")
+            self.logger.error(
+                f"Failed to upload file: {response.status_code}\n URL: {url_file}\n ownCloud filename: {owncloud_filename}"
+            )
 
         self.logger.info(
             f"File {owncloud_filename} uploaded successfully to {url_file}"

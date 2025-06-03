@@ -86,7 +86,8 @@ def test_e2e_grandma(mocker, logger):
 
     # Verify that the notices were saved to the temporary directory
     saved_files = list(shared_path.glob("*.json"))
+    saved_files.sort()
     assert len(saved_files) == 2
     with open(saved_files[0], "r") as f:
         saved_notice = json.load(f)
-    assert saved_notice["superevent_id"] == "S250207bg"  # Example assertion
+    assert saved_notice["superevent_id"] == "S241102br"  # Example assertion

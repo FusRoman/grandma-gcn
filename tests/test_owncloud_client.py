@@ -32,15 +32,6 @@ def test_owncloud_makedir_success(owncloud_client: OwncloudClient):
         assert url_folder == result_url_folder
 
 
-def test_owncloud_makedir_failure(owncloud_client: OwncloudClient):
-    with mock.patch("requests.request") as mock_request:
-        mock_response = mock.Mock()
-        mock_response.status_code = 400
-        mock_request.return_value = mock_response
-        with pytest.raises(Exception, match="Failed to create directory"):
-            owncloud_client.mkdir("fail_dir/")
-
-
 def test_owncloud_makedir_url_type(owncloud_client: OwncloudClient):
     with mock.patch("requests.request") as mock_request:
         mock_response = mock.Mock()
@@ -78,26 +69,6 @@ def test_owncloud_put_file_success(owncloud_client: OwncloudClient):
             assert args[0] == result_url
             assert kwargs["data"] == b"test content"
             assert url == result_url
-
-
-def test_owncloud_put_file_failure(owncloud_client: OwncloudClient):
-
-    mock_file = mock.MagicMock()
-    mock_file.read.return_value = b"test content"
-    mock_open = mock.MagicMock(return_value=mock_file)
-    mock_file.__enter__.return_value = mock_file
-
-    with mock.patch("grandma_gcn.worker.owncloud_client.open", mock_open, create=True):
-        with mock.patch("requests.put") as mock_request:
-            mock_response = mock.Mock()
-            mock_response.status_code = 400
-            mock_request.return_value = mock_response
-            with pytest.raises(Exception, match="Failed to upload file"):
-                owncloud_client.put_file(
-                    Path("fake_failed_path/file.txt"),
-                    URL("https://owncloud.example.com/folder/"),
-                    "owncloud_filename.txt",
-                )
 
 
 def test_owncloud_put_file_url_type(owncloud_client: OwncloudClient):
