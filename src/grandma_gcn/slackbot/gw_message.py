@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Any, Callable
 from fink_utils.slack_bot.msg_builder import Message
-from yarl import URL
 
 from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
@@ -24,7 +23,7 @@ from fink_utils.slack_bot.bot import post_msg_on_slack
 from slack_sdk import WebClient
 
 
-def get_grandma_owncloud_public_url() -> URL:
+def get_grandma_owncloud_public_url() -> str:
     """
     Get the GRANDMA OwnCloud URL.
     This URL is used to access the GRANDMA OwnCloud instance.
@@ -36,7 +35,7 @@ def get_grandma_owncloud_public_url() -> URL:
     str
         The GRANDMA OwnCloud URL.
     """
-    return URL("https://grandma-owncloud.lal.in2p3.fr/index.php/apps/files/?dir=/")
+    return "https://grandma-owncloud.lal.in2p3.fr/index.php/apps/files/?dir=/"
 
 
 def instruments_to_markdown(instruments: list[GW_alert.Instrument]) -> str:
@@ -161,7 +160,8 @@ def build_gwalert_msg(gw_alert: GW_alert, path_gw_alert: str) -> Message:
     )
 
     # Public URL (meaning not the WebDAV url used to make the requests) for the OwnCloud event folder
-    url_owncloud_event = get_grandma_owncloud_public_url() / path_gw_alert
+    url_owncloud_event = get_grandma_owncloud_public_url() + path_gw_alert
+
     owncloud_repo_button = URLButton(
         "OwnCloud - {}".format(gw_alert.event_id),
         str(url_owncloud_event),
@@ -170,13 +170,13 @@ def build_gwalert_msg(gw_alert: GW_alert, path_gw_alert: str) -> Message:
 
     owncloud_repo_image_button = URLButton(
         "OwnCloud - Image",
-        str(url_owncloud_event / "IMAGES"),
+        str(url_owncloud_event + "/IMAGES"),
         emoji=True,
     )
 
     owncloud_repo_photometry_button = URLButton(
         "OwnCloud - Photometry",
-        str(url_owncloud_event / "LOGBOOK"),
+        str(url_owncloud_event + "/LOGBOOK"),
         emoji=True,
     )
 
@@ -383,7 +383,7 @@ def build_gwemopt_results_message(
     )
 
     # Public URL (meaning not the WebDAV url used to make the requests) for the OwnCloud event folder
-    url_owncloud_event = get_grandma_owncloud_public_url() / path_gw_alert
+    url_owncloud_event = get_grandma_owncloud_public_url() + path_gw_alert
     owncloud_repo_button = URLButton(
         "OwnCloud - {}".format(gw_alert.event_id),
         str(url_owncloud_event),
