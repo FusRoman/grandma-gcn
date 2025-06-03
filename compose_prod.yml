@@ -52,6 +52,14 @@ services:
     volumes:
       - ../grandma-gcn:/home/${USR}/code/
       - e2e_volume:/shared-tmp
+    command:
+      [
+        "python -m",
+        "celery",
+        "-A grandma_gcn.worker.celery_app",
+        "worker",
+        "--loglevel=DEBUG",
+      ]
 
 volumes:
   e2e_volume:
