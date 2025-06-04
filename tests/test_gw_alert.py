@@ -214,3 +214,65 @@ def test_flatten(S241102_update: GW_alert):
     assert flat_map["DISTSIGMA"].sum() == pytest.approx(75590.06787484365, rel=1e-2)
     assert flat_map["DISTNORM"].shape == (49152,)
     assert flat_map["DISTNORM"].sum() == pytest.approx(2453462276.0800576, rel=1e-2)
+
+
+def test_gw_score_terrestrial(gw_alert_significant: GW_alert):
+    # For a terrestrial event, score should be 0, NO_GRANDMA
+    gw_alert_significant.gw_dict["event"]["classification"] = {"Terrestrial": 0.99}
+    score, msg, action = gw_alert_significant.gw_score()
+    assert score == 0
+    assert "not an Astrophysical event" in msg or "please wait" in msg
+    assert action == GW_alert.GRANDMA_Action.NO_GRANDMA
+
+
+def test_gw_score_bbh_far_badly_localized(S241102_update: GW_alert):
+    # BBH, far and badly localized, should be score 1, NO_GRANDMA
+    S241102_update.BBH_threshold = 0.0  # force threshold to always pass
+    S241102_update.Distance_threshold = 1  # force to fail distance
+    S241102_update.ErrorRegion_threshold = 1  # force to fail region
+    score, msg, action = S241102_update.gw_score()
+    assert score == 1
+    assert "far and badly localized BBH event" in msg
+    assert action == GW_alert.GRANDMA_Action.NO_GRANDMA
+
+
+def test_gw_score_bbh_interesting(S241102_initial: GW_alert):
+    # BBH, well localized and close, should be score 2, GO_GRANDMA
+    S241102_initial.BBH_threshold = 0.0  # force threshold to always pass
+    S241102_initial.Distance_threshold = 1000  # large enough
+    S241102_initial.ErrorRegion_threshold = 1000  # large enough
+    score, msg, action = S241102_initial.gw_score()
+    assert score == 2
+    assert "very interesting event" in msg
+    assert action == GW_alert.GRANDMA_Action.GO_GRANDMA
+
+
+def test_gw_score_bns_extremely_interesting(S241102_initial: GW_alert):
+    # Simulate a BNS, well localized and close, should be score 3, GO_GRANDMA
+    S241102_initial.gw_dict["event"]["classification"] = {"BNS": 0.99}
+    S241102_initial.Distance_threshold = 1000
+    S241102_initial.ErrorRegion_threshold = 1000
+    score, msg, action = S241102_initial.gw_score()
+    assert score == 3
+    assert "EXTREMELY interesting event" in msg
+    assert action == GW_alert.GRANDMA_Action.GO_GRANDMA
+
+
+def test_gw_score_bns_interesting_far(S241102_initial: GW_alert):
+    # Simulate a BNS, far or badly localized, should be score 2, GO_GRANDMA
+    S241102_initial.gw_dict["event"]["classification"] = {"BNS": 0.99}
+    S241102_initial.Distance_threshold = 1  # force to fail distance
+    S241102_initial.ErrorRegion_threshold = 1  # force to fail region
+    score, msg, action = S241102_initial.gw_score()
+    assert score == 2
+    assert "very interesting event" in msg
+    assert action == GW_alert.GRANDMA_Action.GO_GRANDMA
+
+
+def test_gw_score_retraction(S241102_initial: GW_alert):
+    # Simulate a retraction event
+    S241102_initial.gw_dict["alert_type"] = "RETRACTATION"
+    score, msg, action = S241102_initial.gw_score()
+    assert score == 0
+    assert "RETRACTION" in msg
+    assert action == GW_alert.GRANDMA_Action.NO_GRANDMA

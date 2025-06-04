@@ -139,7 +139,7 @@ def run_gwemopt(
     return obs_plan_results
 
 
-def table_to_custom_ascii(telescope, table):
+def table_to_custom_ascii(telescope: str, table: Table | None) -> str:
     """
     Convert a table returned by gwemopt to a custom ASCII format for the grandma owncloud.
 
@@ -147,8 +147,8 @@ def table_to_custom_ascii(telescope, table):
     ----------
     telescope : str
         The name of the telescope.
-    table : Table
-        The table containing the observation plan data.
+    table : Table | None
+        The table containing the observation plan data. If None, a message indicating no tiles will be returned.
 
     Returns
     -------

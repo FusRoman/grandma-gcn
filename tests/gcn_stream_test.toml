@@ -11,7 +11,7 @@ secret = "tata"
 topics = ["igwn.gwalert"]
 
 [PATH]
-gcn_stream_log_path = "gcn_stream.log"
+gcn_stream_log_path = "gcn_stream_test.log"
 notice_path = "notices"
 celery_task_log_path = "gwemopt_task"
 

@@ -23,7 +23,6 @@ class GCNStream:
             restart the polling of the gcn message from the beginning (offset 0), by default False
         """
         self.logger = logger
-        self.logger.info("Initialise a new GcnStream")
         self.path_config = path_gcn_config
 
         self._gcn_config = load_gcn_config(self.path_config, logger=self.logger)
@@ -40,6 +39,7 @@ class GCNStream:
         self.slack_client = init_slackbot(self.logger)
 
         self.notice_path = Path(self._gcn_config["PATH"]["notice_path"])
+        self.logger.info("GCN stream successfully initialized")
 
     @property
     def gcn_config(self) -> dict[str, Any]:
@@ -50,8 +50,9 @@ class GCNStream:
         Run the polling infinite loop of the GCN stream with periodic configuration checks
         """
 
-        gcn_consumer = Consumer(gcn_stream=self)
+        gcn_consumer = Consumer(gcn_stream=self, logger=self.logger)
 
+        self.logger.info("Starting GCN stream consumer")
         while True:
             gcn_consumer.start_poll_loop()
             if test:
@@ -93,7 +94,7 @@ def main(gcn_config_path: str = "instance/gcn_config.toml") -> None:
     gcn_stream.run()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     import argparse
 
     parser = argparse.ArgumentParser(description="Run the GCN stream")

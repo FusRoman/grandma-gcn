@@ -3,7 +3,8 @@ from pathlib import Path
 import tempfile
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+from grandma_gcn.gcn_stream import stream
 
 from yarl import URL
 
@@ -98,7 +99,7 @@ def test_start_poll_loop(mocker, mock_gcn_stream):
     )
 
     # Create an instance of the Consumer class
-    consumer = Consumer(gcn_stream=mock_gcn_stream)
+    consumer = Consumer(gcn_stream=mock_gcn_stream, logger=mock_gcn_stream.logger)
 
     # Call the start_poll_loop method
     consumer.start_poll_loop(interval_between_polls=1, max_retries=2)
@@ -265,3 +266,27 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
         assert kwargs["url"] == URL(
             "https://owncloud.example.com/Candidates/GW/S241102br/VOEVENTS"
         )
+
+
+def test_main_calls_gcnstream_and_run(tmp_path):
+    fake_config_path = tmp_path / "fake_config.toml"
+    fake_config_path.write_text(
+        "[PATH]\ngcn_stream_log_path='log.log'\nnotice_path='.'\n"
+    )
+
+    with (
+        patch("grandma_gcn.gcn_stream.stream.init_logging") as mock_init_logging,
+        patch("grandma_gcn.gcn_stream.stream.GCNStream") as mock_gcnstream_cls,
+    ):
+
+        mock_logger = MagicMock()
+        mock_init_logging.return_value = mock_logger
+
+        mock_gcnstream = MagicMock()
+        mock_gcnstream_cls.return_value = mock_gcnstream
+
+        stream.main(gcn_config_path=str(fake_config_path))
+
+        mock_init_logging.assert_called_once_with(logger_name="gcn_stream")
+        mock_gcnstream_cls.assert_called_once()
+        mock_gcnstream.run.assert_called_once()

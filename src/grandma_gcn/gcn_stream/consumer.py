@@ -1,11 +1,11 @@
 from pathlib import Path
 from celery import chord
 from gcn_kafka import Consumer as KafkaConsumer
-import logging
 import uuid
 
 from yarl import URL
 
+from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.slackbot.gw_message import build_gwalert_msg, new_alert_on_slack
 from grandma_gcn.worker.gwemopt_worker import gwemopt_post_task, gwemopt_task
@@ -13,8 +13,8 @@ from grandma_gcn.worker.owncloud_client import OwncloudClient
 
 
 class Consumer(KafkaConsumer):
-    def __init__(self, *, gcn_stream) -> None:
-        self.logger = logging.getLogger("gcn_stream.consumer")
+    def __init__(self, gcn_stream, logger: LoggerNewLine) -> None:
+        self.logger = logger
         self.logger.info("Starting GCN stream consumer")
 
         super().__init__(
