@@ -280,7 +280,9 @@ def test_process_alert_calls(mocker):
                             autospec=True,
                             wraps=OwncloudClient.mkdir,
                         ) as spy_mkdir:
-                            consumer = Consumer(gcn_stream=mock_gcn_stream)
+                            consumer = Consumer(
+                                gcn_stream=mock_gcn_stream, logger=logging.getLogger()
+                            )
                             consumer.process_alert(notice)
 
                             # Vérifie que mkdir a été appelé avec le bon argument

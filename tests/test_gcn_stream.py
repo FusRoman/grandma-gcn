@@ -98,7 +98,7 @@ def test_start_poll_loop(mocker, mock_gcn_stream):
     )
 
     # Create an instance of the Consumer class
-    consumer = Consumer(gcn_stream=mock_gcn_stream)
+    consumer = Consumer(gcn_stream=mock_gcn_stream, logger=mock_gcn_stream.logger)
 
     # Call the start_poll_loop method
     consumer.start_poll_loop(interval_between_polls=1, max_retries=2)
