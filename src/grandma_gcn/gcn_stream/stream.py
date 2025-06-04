@@ -94,7 +94,7 @@ def main(gcn_config_path: str = "instance/gcn_config.toml") -> None:
     gcn_stream.run()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     import argparse
 
     parser = argparse.ArgumentParser(description="Run the GCN stream")
