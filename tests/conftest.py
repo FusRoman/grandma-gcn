@@ -1,9 +1,11 @@
 from pathlib import Path
+import pickle
 
 import pytest
 
 from grandma_gcn.gcn_stream.gcn_logging import init_logging
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
+from astropy.table import Table
 
 
 @pytest.fixture(autouse=True)
@@ -93,3 +95,8 @@ def owncloud_client(gcn_config_path, logger):
 
     config = load_gcn_config(gcn_config_path, logger=logger)
     return OwncloudClient(config.get("OWNCLOUD"))
+
+
+@pytest.fixture
+def tiles() -> dict[str, Table]:
+    return pickle.load(open("tests/data/tiles.pickle", "rb"))

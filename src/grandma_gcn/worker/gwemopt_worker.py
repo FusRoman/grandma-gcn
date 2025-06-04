@@ -408,6 +408,7 @@ def gwemopt_task(
                     worker_slack_client,
                     channel=slack_channel,
                     logger=logger,
+                    tiles_plan=tiles,
                     celery_task_id=task_id,
                     execution_time=(Time.now() - start_task).sec,
                     obs_strategy=obs_strategy,
