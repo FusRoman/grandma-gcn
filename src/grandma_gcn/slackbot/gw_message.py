@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from typing import Any, Callable
 from fink_utils.slack_bot.msg_builder import Message
@@ -19,9 +20,10 @@ from fink_utils.slack_bot.rich_text.rich_section import SectionElement
 
 from astropy.time import Time
 
-from fink_utils.slack_bot.bot import post_msg_on_slack
 from slack_sdk import WebClient
 from astropy.table import Table
+from slack_sdk.errors import SlackApiError
+from slack_sdk.web.slack_response import SlackResponse
 
 
 def get_grandma_owncloud_public_url() -> str:
@@ -275,6 +277,7 @@ def post_image_on_slack(
     filetitle: str,
     channel_id: str,
     alt_text: str | None = None,
+    threads_ts: str | None = None,
 ) -> str:
     """
     Post an image file to a Slack channel.
@@ -310,6 +313,7 @@ def post_image_on_slack(
             title=filetitle,
             alt_text=alt_text,
             channel=channel_id,
+            thread_ts=threads_ts,
         )
 
     file_info = upload_response["file"]
@@ -323,7 +327,6 @@ def build_gwemopt_results_message(
     obs_strategy: GW_alert.ObservationStrategy,
     telescopes: list[str],
     execution_time: float,
-    slack_plot_permalink: str | None,
     path_gw_alert: str,
 ) -> Message:
     """
@@ -343,8 +346,6 @@ def build_gwemopt_results_message(
         List of telescopes involved in the gwemopt task.
     execution_time : float
         The total execution time of the processing task in seconds.
-    slack_plot_permalink : str | None
-        The public permalink to the coverage map image on Slack, if available.
     path_gw_alert : str
         The path to the alert folder on OwnCloud, used to link to the results.
 
@@ -382,13 +383,6 @@ def build_gwemopt_results_message(
                 )
             ),
         )
-        .add_elements(
-            MarkdownText(
-                "🧭 *Coverage Map:*\n<{}|View image>".format(slack_plot_permalink)
-            )
-            if slack_plot_permalink
-            else MarkdownText("🧭 *Coverage Map:*\nNo coverage map available.")
-        )
     )
 
     # Public URL (meaning not the WebDAV url used to make the requests) for the OwnCloud event folder
@@ -407,6 +401,56 @@ def build_gwemopt_results_message(
     return msg
 
 
+def post_msg_on_slack(
+    webclient: WebClient,
+    channel: str,
+    msg: list[Message],
+    sleep_delay: int = 1,
+    logger: LoggerNewLine = None,
+    verbose: bool = False,
+) -> SlackResponse:
+    """
+    Send a msg on the specified slack channel
+
+    Parameters
+    ----------
+    webclient : WebClient
+        slack bot client
+    channel : str
+        the channel where will be posted the message
+    msg : list
+        list of message to post on slack, each string in the list will be a single post.
+    sleep_delay : int, optional
+        delay to wait between the message, by default 1
+    logger : _type_, optional
+        logger used to print logs, by default None
+    verbose : bool, optional
+        if true, print logs between the message, by default False
+
+    * Notes:
+
+    Before sending message on slack, check that the Fink bot have been added to the targeted channel.
+
+    Examples
+    --------
+    see bot_test.py
+    """
+    try:
+        for tmp_msg in msg:
+            json_p = json.dumps(tmp_msg.blocks["blocks"])
+            slack_message_response = webclient.chat_postMessage(
+                channel=channel, text="error with msg blocks", blocks=json_p
+            )
+
+            if verbose:
+                logger.debug("Post msg on slack successfull")
+
+            return slack_message_response
+    except SlackApiError as e:
+        if e.response["ok"] is False:
+            logger.error("Post slack msg error", exc_info=1)
+
+
 def new_alert_on_slack(
     gw_alert: GW_alert,
     build_msg_function: Callable[[GW_alert], Message],
@@ -414,7 +458,7 @@ def new_alert_on_slack(
     channel: str,
     logger: LoggerNewLine,
     **kwargs: dict[str, Any],
-) -> None:
+) -> SlackResponse:
     """
     Send the alert to slack
     Parameters
@@ -431,7 +475,7 @@ def new_alert_on_slack(
 
     msg = build_msg_function(gw_alert, **kwargs)
 
-    post_msg_on_slack(
+    response = post_msg_on_slack(
         slack_client,
         channel,
         [msg],
@@ -440,3 +484,5 @@ def new_alert_on_slack(
     )
 
     logger.info("Alert sent to Slack channel: {}".format(channel))
+
+    return response
