@@ -389,7 +389,7 @@ def gwemopt_task(
                     permalink = post_image_on_slack(
                         worker_slack_client,
                         filepath=output_path / "tiles_coverage_int.png",
-                        filetitle=f"{gw_alert.event_id} {obs_strategy.value} Coverage Map",
+                        filetitle=f"{gw_alert.event_id} {obs_strategy.value} {"_".join(telescopes)} Coverage Map",
                         filename=f"coverage_{gw_alert.event_id}_{obs_strategy.value}_map.png",
                         channel_id=channel_id,
                     )
