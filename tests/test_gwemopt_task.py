@@ -1,3 +1,4 @@
+import pickle
 import tempfile
 import logging
 
@@ -254,7 +255,10 @@ def test_process_alert_calls(mocker):
         mock_owncloud_mkdir_request = mocker.patch("requests.request")
         mock_owncloud_mkdir_request.return_value.status_code = 201
 
-        # Patch uuid.uuid4 pour retourner un objet avec .hex constant
+        mock_owncloud_put_file = mocker.patch("requests.put")
+        mock_owncloud_put_file.return_value.status_code = 201
+
+        # Patch uuid.uuid4 to return an object with a fixed hex value
         class DummyUUID:
             hex = "fixeduuidhex"
 
@@ -271,9 +275,12 @@ def test_process_alert_calls(mocker):
                         }
 
                         mock_open.return_value.__enter__.return_value = MagicMock()
-                        mock_obs_plan.return_value = (MagicMock(), MagicMock())
 
-                        # Patch la méthode mkdir de OwncloudClient
+                        tiles = pickle.load(open("tests/data/tiles.pickle", "rb"))
+                        tiles["KAO"] = None  # Simulate no data for KAO
+                        mock_obs_plan.return_value = (tiles, MagicMock())
+
+                        # Patch OwncloudClient.mkdir to track calls
                         with patch.object(
                             OwncloudClient,
                             "mkdir",

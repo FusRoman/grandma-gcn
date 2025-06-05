@@ -5,7 +5,7 @@
 groups = ["default", "dev", "lint", "test"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:4f7b5216db39ce05cab5a626ef3a96f6915ff253bdccedd2d1525427f6949ee9"
+content_hash = "sha256:7c570dc32d49e11e69428318db1ca165b0fe34bfef966a8ca6c2d9cbf6ce9112"
 
 [[metadata.targets]]
 requires_python = ">=3.12"
@@ -2387,6 +2387,32 @@ groups = ["default"]
 files = [
     {file = "soupsieve-2.7-py3-none-any.whl", hash = "sha256:6e60cc5c1ffaf1cebcc12e8188320b72071e922c2e897f737cadce79ad5d30c4"},
     {file = "soupsieve-2.7.tar.gz", hash = "sha256:ad282f9b6926286d2ead4750552c8a6142bc4c783fd66b0293547c8fe6ae126a"},
+]
+
+[[package]]
+name = "spherical-geometry"
+version = "1.3.3"
+requires_python = ">=3.11"
+summary = "Python based tools for spherical geometry"
+groups = ["default"]
+dependencies = [
+    "astropy>=5.2.0",
+    "numpy>=1.25",
+]
+files = [
+    {file = "spherical_geometry-1.3.3-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:88eb8272d733c7881d7f9fd0e24b309446a2f2e9a558a79aa92c0fabf5d54050"},
+    {file = "spherical_geometry-1.3.3-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:604e2cbbb569ad415bf4e07fa93f30e59c64214f127d6d93c9b9237381d816b2"},
+    {file = "spherical_geometry-1.3.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:fa4debfbef86de2afb54a7a1e484e3b649fdb707a95edd2cfdeffca78853e216"},
+    {file = "spherical_geometry-1.3.3-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:0ab8382b87f461e26de828e96f44e03589d591b3ec524f6dfe1fdb71b2f4521a"},
+    {file = "spherical_geometry-1.3.3-cp312-cp312-win32.whl", hash = "sha256:0b15bec5add03a34d00fea443f5c6595525a98507cc5cd2e88d18aba79d25d3a"},
+    {file = "spherical_geometry-1.3.3-cp312-cp312-win_amd64.whl", hash = "sha256:9846eaf1efe761b7abbc3b477a08fc0b5e0440c2751777e31d7dff98deb82d46"},
+    {file = "spherical_geometry-1.3.3-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:60f5ddafb24c8e56374b2d47207c9aa7c1a9d2e7e5abcb9ac6056bfd968790b6"},
+    {file = "spherical_geometry-1.3.3-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:c0ef5dfc96f89fc2d7ecf5537aa450a72c743f9417cd445b092736641a4a5cea"},
+    {file = "spherical_geometry-1.3.3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ac746b11447c21faa575bb2db8707be3e1c8917657ed975dad2582ecae1da019"},
+    {file = "spherical_geometry-1.3.3-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:e4a0e8e1a5b682be9a533c0f3b7961477a5a08ec652df65c7ecdd1e75c38e50b"},
+    {file = "spherical_geometry-1.3.3-cp313-cp313-win32.whl", hash = "sha256:d83c852002c969d129c2c0bedf57b367804d16e909fb091e62900d7eb1c9f3d4"},
+    {file = "spherical_geometry-1.3.3-cp313-cp313-win_amd64.whl", hash = "sha256:a9bd710f90a71ea8d944763ddf47d231cee791daca423503557fe917e5f6ca9a"},
+    {file = "spherical_geometry-1.3.3.tar.gz", hash = "sha256:e0b90c6ca5a22b270c151e856e15dcb0a3d715ff13f13d2bbd492daae644540a"},
 ]
 
 [[package]]

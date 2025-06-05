@@ -21,6 +21,7 @@ from astropy.time import Time
 
 from fink_utils.slack_bot.bot import post_msg_on_slack
 from slack_sdk import WebClient
+from astropy.table import Table
 
 
 def get_grandma_owncloud_public_url() -> str:
@@ -317,6 +318,7 @@ def post_image_on_slack(
 
 def build_gwemopt_results_message(
     gw_alert: GW_alert,
+    tiles_plan: dict[str, Table | None],
     celery_task_id: int,
     obs_strategy: GW_alert.ObservationStrategy,
     telescopes: list[str],
@@ -331,6 +333,8 @@ def build_gwemopt_results_message(
     ----------
     gw_alert : GW_alert
         The GW alert object.
+    tiles_plan : dict[str, Table]
+        A dictionary mapping telescope names to their respective tiles plan.
     celery_task_id : int
         The ID of the Celery task that processed the alert.
     obs_strategy : GW_alert.ObservationStrategy
@@ -370,7 +374,12 @@ def build_gwemopt_results_message(
         )
         .add_elements(
             MarkdownText(
-                "*Telescopes:*\n{}".format("\n".join(f"- {tel}" for tel in telescopes))
+                "*Telescopes: (coverage percentage)*\n{}".format(
+                    "\n".join(
+                        f"- {tel} ({gw_alert.integrated_surface_percentage(tiles_plan[tel]):.2f} %)"
+                        for tel in telescopes
+                    )
+                )
             ),
         )
         .add_elements(

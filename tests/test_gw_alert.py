@@ -6,6 +6,8 @@ from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from astropy.time import Time
 from numpy import inf, logical_not, isinf, mean
 
+from astropy.table import Table
+
 
 @pytest.fixture
 def path_tests():
@@ -276,3 +278,37 @@ def test_gw_score_retraction(S241102_initial: GW_alert):
     assert score == 0
     assert "RETRACTION" in msg
     assert action == GW_alert.GRANDMA_Action.NO_GRANDMA
+
+
+def test_integrated_proba_percentage_none(S241102_update: GW_alert):
+    # Should return 0.0 and log a warning if tiles_table is None
+    result = S241102_update.integrated_proba_percentage(None)
+    assert result == 0.0
+
+
+def test_integrated_surface_percentage_none(S241102_update: GW_alert):
+    # Should return 0.0 and log a warning if tiles_table is None
+    result = S241102_update.integrated_surface_percentage(None)
+    assert result == 0.0
+
+
+def test_integrated_proba_percentage(
+    gw_alert_significant: GW_alert, S241102_update: GW_alert, tiles: dict[str, Table]
+):
+    # Should return the integrated probability percentage for the given tiles
+    result = S241102_update.integrated_proba_percentage(tiles["TCH"])
+    assert result == pytest.approx(37.19958767563451, rel=1e-4)
+
+    result = gw_alert_significant.integrated_proba_percentage(tiles["TCH"])
+    assert result == pytest.approx(37.19825472541179, rel=1e-4)
+
+
+def test_integrated_surface_percentage(
+    gw_alert_significant: GW_alert, S241102_update: GW_alert, tiles: dict[str, Table]
+):
+    # Should return the integrated surface percentage for the given tiles
+    result = S241102_update.integrated_surface_percentage(tiles["TCH"])
+    assert result == pytest.approx(25.457746139820987, rel=1e-4)
+
+    result = gw_alert_significant.integrated_surface_percentage(tiles["TCH"])
+    assert result == pytest.approx(0.19985883021353368, rel=1e-4)
