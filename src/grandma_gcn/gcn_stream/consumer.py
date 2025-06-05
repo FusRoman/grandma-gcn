@@ -115,11 +115,27 @@ class Consumer(KafkaConsumer):
 
     def process_alert(self, notice: bytes) -> None:
         """
-        Process the alert and return a message.
+        Process a GW alert notice received from the Kafka stream.
+
+        This method performs the following steps:
+        1. Parses the alert notice and computes its significance score using configured thresholds.
+        2. If the alert is significant (score > 1):
+            - Saves the notice as a JSON file in the configured notice directory.
+            - Initializes a dedicated folder structure for the event on OwnCloud (including GWEMOPT, images, logbook, etc.).
+            - Sends a formatted alert message to the configured Slack channel.
+            - For each GWEMOPT configuration (telescopes, number of tiles, strategy), dispatches a Celery task to generate observation plans in parallel.
+            - All GWEMOPT tasks are grouped in a Celery chord, with a post-processing task triggered upon completion.
+        3. Logs all major actions and errors for traceability.
 
         Parameters
-        -----------
-            notice (bytes): The alert notice in bytes.
+        ----------
+        notice : bytes
+            The alert notice in bytes, as received from the Kafka stream.
+
+        Raises
+        ------
+        Exception
+            Any exception during processing is logged and re-raised.
         """
         self.logger.info("Processing alert")
 
