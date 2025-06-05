@@ -1,6 +1,6 @@
 [project]
 name = "grandma-gcn"
-version = "3.0.0"
+version = "4.0.0"
 description = "Automated ingestion, analysis, and distribution of gravitational wave (GW) alerts for the GRANDMA collaboration. Provides real-time GCN alert processing, observation strategy generation (gwemopt), Slack and OwnCloud integration, and Celery-based automation."
 authors = [{ name = "Roman", email = "roman.lemontagner@gmail.com" }]
 dependencies = [
