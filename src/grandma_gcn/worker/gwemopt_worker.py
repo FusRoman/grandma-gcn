@@ -384,27 +384,8 @@ def gwemopt_task(
 
                 logger.info("GW_alert successfully processed.")
 
-                try:
-                    # Post the coverage map on Slack
-                    permalink = post_image_on_slack(
-                        worker_slack_client,
-                        filepath=output_path / "tiles_coverage_int.png",
-                        filetitle=f"{gw_alert.event_id} {obs_strategy.value} {"_".join(telescopes)} Coverage Map",
-                        filename=f"coverage_{gw_alert.event_id}_{obs_strategy.value}_map.png",
-                        channel_id=channel_id,
-                    )
-                except FileNotFoundError as e:
-                    logger.error(
-                        f"Coverage map file not found: {e}. Skipping posting map on Slack."
-                    )
-                    permalink = None
-
-                logger.info(
-                    f"Coverage map posted on slack, permalink for coverage map: {permalink}"
-                )
-
                 # Post the gwemopt result message on Slack
-                new_alert_on_slack(
+                gwemopt_result_response = new_alert_on_slack(
                     gw_alert,
                     build_gwemopt_results_message,
                     worker_slack_client,
@@ -415,11 +396,27 @@ def gwemopt_task(
                     execution_time=(Time.now() - start_task).sec,
                     obs_strategy=obs_strategy,
                     telescopes=telescopes,
-                    slack_plot_permalink=permalink,
                     path_gw_alert=path_gw_alert,
                 )
 
                 logger.info("gwemopt post message successfully sent to Slack.")
+
+                try:
+                    # Post the coverage map on Slack
+                    post_image_on_slack(
+                        worker_slack_client,
+                        filepath=output_path / "tiles_coverage_int.png",
+                        filetitle=f"{gw_alert.event_id} {obs_strategy.value} {"_".join(telescopes)} Coverage Map",
+                        filename=f"coverage_{gw_alert.event_id}_{obs_strategy.value}_map.png",
+                        channel_id=channel_id,
+                        threads_ts=gwemopt_result_response["ts"],
+                    )
+                except FileNotFoundError as e:
+                    logger.error(
+                        f"Coverage map file not found: {e}. Skipping posting map on Slack."
+                    )
+
+                logger.info("Coverage map posted on slack in the message thread")
 
     except Exception as e:
         logger.error(f"An error occurred while processing the task: {e}")

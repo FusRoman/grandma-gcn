@@ -4,6 +4,21 @@ from pytest import mark
 
 from tests.test_gw_alert import open_notice_file
 
+import time
+
+
+def push_message_for_test(mocker, message_queue, topic, notice_file):
+    """
+    Helper function to push a message to the mocked Kafka consumer for testing.
+    """
+    mock_message = mocker.Mock()
+    mock_message.topic.return_value = topic
+    mock_message.offset.return_value = len(message_queue) + 1
+    mock_message.error.return_value = None
+    mock_message.value.return_value = open_notice_file(Path("tests"), notice_file)
+
+    message_queue.append(mock_message)
+
 
 @mark.e2e
 def test_e2e_grandma(mocker, logger):
@@ -28,29 +43,21 @@ def test_e2e_grandma(mocker, logger):
     # Simulate a message queue
     message_queue = []
 
-    # Create a mocked message
-    mock_message = mocker.Mock()
-    mock_message.topic.return_value = "igwn.gwalert"
-    mock_message.offset.return_value = 42
-    mock_message.error.return_value = None
-    mock_message.value.return_value = open_notice_file(
-        Path("tests"), "S250207bg-preliminary.json"
+    push_message_for_test(
+        mocker, message_queue, "igwn.gwalert", "S241102br-preliminary.json"
     )
 
-    # Add the mocked message to the queue
-    message_queue.append(mock_message)
-
-    # Create a second mocked message
-    mock_message = mocker.Mock()
-    mock_message.topic.return_value = "igwn.gwalert"
-    mock_message.offset.return_value = 42
-    mock_message.error.return_value = None
-    mock_message.value.return_value = open_notice_file(
-        Path("tests"), "S241102br-preliminary.json"
+    push_message_for_test(
+        mocker, message_queue, "igwn.gwalert", "S241102br-initial.json"
     )
 
-    # Add the mocked message to the queue
-    message_queue.append(mock_message)
+    push_message_for_test(
+        mocker, message_queue, "igwn.gwalert", "S250207bg-preliminary.json"
+    )
+
+    push_message_for_test(
+        mocker, message_queue, "igwn.gwalert", "S241102br-update.json"
+    )
 
     # Mock the poll method
     def mock_poll(*args, **kwargs):
@@ -64,6 +71,8 @@ def test_e2e_grandma(mocker, logger):
     def mock_commit(message):
         if message in message_queue:
             message_queue.remove(message)
+        # Simulate a delay for processing
+        time.sleep(60)
 
     mock_commit_method = mocker.patch(
         "grandma_gcn.gcn_stream.consumer.KafkaConsumer.commit", side_effect=mock_commit
