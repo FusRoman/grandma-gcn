@@ -5,7 +5,7 @@
 groups = ["default", "dev", "lint", "test"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:7c570dc32d49e11e69428318db1ca165b0fe34bfef966a8ca6c2d9cbf6ce9112"
+content_hash = "sha256:c983d254baa79002c511eea53577a999e8064de054c6ce187a509f52c8fb7337"
 
 [[metadata.targets]]
 requires_python = ">=3.12"
@@ -239,7 +239,7 @@ files = [
 
 [[package]]
 name = "celery"
-version = "5.5.2"
+version = "5.5.3"
 requires_python = ">=3.8"
 summary = "Distributed Task Queue."
 groups = ["default"]
@@ -255,24 +255,24 @@ dependencies = [
     "vine<6.0,>=5.1.0",
 ]
 files = [
-    {file = "celery-5.5.2-py3-none-any.whl", hash = "sha256:54425a067afdc88b57cd8d94ed4af2ffaf13ab8c7680041ac2c4ac44357bdf4c"},
-    {file = "celery-5.5.2.tar.gz", hash = "sha256:4d6930f354f9d29295425d7a37261245c74a32807c45d764bedc286afd0e724e"},
+    {file = "celery-5.5.3-py3-none-any.whl", hash = "sha256:0b5761a07057acee94694464ca482416b959568904c9dfa41ce8413a7d65d525"},
+    {file = "celery-5.5.3.tar.gz", hash = "sha256:6c972ae7968c2b5281227f01c3a3f984037d21c5129d07bf3550cc2afc6b10a5"},
 ]
 
 [[package]]
 name = "celery"
-version = "5.5.2"
+version = "5.5.3"
 extras = ["redis"]
 requires_python = ">=3.8"
 summary = "Distributed Task Queue."
 groups = ["default"]
 dependencies = [
-    "celery==5.5.2",
-    "redis!=4.5.5,<6.0.0,>=4.5.2",
+    "celery==5.5.3",
+    "kombu[redis]",
 ]
 files = [
-    {file = "celery-5.5.2-py3-none-any.whl", hash = "sha256:54425a067afdc88b57cd8d94ed4af2ffaf13ab8c7680041ac2c4ac44357bdf4c"},
-    {file = "celery-5.5.2.tar.gz", hash = "sha256:4d6930f354f9d29295425d7a37261245c74a32807c45d764bedc286afd0e724e"},
+    {file = "celery-5.5.3-py3-none-any.whl", hash = "sha256:0b5761a07057acee94694464ca482416b959568904c9dfa41ce8413a7d65d525"},
+    {file = "celery-5.5.3.tar.gz", hash = "sha256:6c972ae7968c2b5281227f01c3a3f984037d21c5129d07bf3550cc2afc6b10a5"},
 ]
 
 [[package]]
@@ -827,12 +827,12 @@ files = [
 
 [[package]]
 name = "fink-utils"
-version = "0.41.2"
+version = "0.41.3"
 summary = "Collection of useful functionalities used across the Fink ecosystem."
 groups = ["default"]
 files = [
-    {file = "fink-utils-0.41.2.tar.gz", hash = "sha256:0fbd2cec16562a2d5af2c67bd39f3136d1174d0774e31eaab0b3ac952d7f3317"},
-    {file = "fink_utils-0.41.2-py3-none-any.whl", hash = "sha256:08f40baaf3d84c149a89882e08813392f67ed7caa3247dfb63b1342bda98c307"},
+    {file = "fink-utils-0.41.3.tar.gz", hash = "sha256:14cea45ccfd7693d07d4e5c019f7f7d1172f2323ae6c4636595f00492220a1e8"},
+    {file = "fink_utils-0.41.3-py3-none-any.whl", hash = "sha256:8a9d55e23e6717cc2296fcdca80daddb6c7e50dec82c1e16187c2635c1e7c183"},
 ]
 
 [[package]]
@@ -893,11 +893,11 @@ files = [
 
 [[package]]
 name = "gwemopt"
-version = "1.1.1"
+version = "1.2.0"
 requires_python = ">=3.12"
 git = "https://github.com/FusRoman/old_gwemopt"
-ref = "v1.1.1"
-revision = "08066b62f22fa3053cc6b7eee60bfb3f4c662d01"
+ref = "v1.2.0"
+revision = "dd35b9936db4488e7bf6c89b9bde5ef0957abc45"
 summary = "Default template for PDM package"
 groups = ["default"]
 dependencies = [
@@ -1236,19 +1236,36 @@ files = [
 
 [[package]]
 name = "kombu"
-version = "5.5.3"
+version = "5.5.4"
 requires_python = ">=3.8"
 summary = "Messaging library for Python."
 groups = ["default"]
 dependencies = [
     "amqp<6.0.0,>=5.1.1",
     "backports-zoneinfo[tzdata]>=0.2.1; python_version < \"3.9\"",
+    "packaging",
     "tzdata>=2025.2; python_version >= \"3.9\"",
     "vine==5.1.0",
 ]
 files = [
-    {file = "kombu-5.5.3-py3-none-any.whl", hash = "sha256:5b0dbceb4edee50aa464f59469d34b97864be09111338cfb224a10b6a163909b"},
-    {file = "kombu-5.5.3.tar.gz", hash = "sha256:021a0e11fcfcd9b0260ef1fb64088c0e92beb976eb59c1dfca7ddd4ad4562ea2"},
+    {file = "kombu-5.5.4-py3-none-any.whl", hash = "sha256:a12ed0557c238897d8e518f1d1fdf84bd1516c5e305af2dacd85c2015115feb8"},
+    {file = "kombu-5.5.4.tar.gz", hash = "sha256:886600168275ebeada93b888e831352fe578168342f0d1d5833d88ba0d847363"},
+]
+
+[[package]]
+name = "kombu"
+version = "5.5.4"
+extras = ["redis"]
+requires_python = ">=3.8"
+summary = "Messaging library for Python."
+groups = ["default"]
+dependencies = [
+    "kombu==5.5.4",
+    "redis!=4.5.5,!=5.0.2,<=5.2.1,>=4.5.2",
+]
+files = [
+    {file = "kombu-5.5.4-py3-none-any.whl", hash = "sha256:a12ed0557c238897d8e518f1d1fdf84bd1516c5e305af2dacd85c2015115feb8"},
+    {file = "kombu-5.5.4.tar.gz", hash = "sha256:886600168275ebeada93b888e831352fe578168342f0d1d5833d88ba0d847363"},
 ]
 
 [[package]]
@@ -1975,6 +1992,17 @@ files = [
 ]
 
 [[package]]
+name = "pygments"
+version = "2.19.1"
+requires_python = ">=3.8"
+summary = "Pygments is a syntax highlighting package written in Python."
+groups = ["test"]
+files = [
+    {file = "pygments-2.19.1-py3-none-any.whl", hash = "sha256:9ea1544ad55cecf4b8242fab6dd35a93bbce657034b0611ee383099054ab6d8c"},
+    {file = "pygments-2.19.1.tar.gz", hash = "sha256:61c16d2a8576dc0649d9f39e089b5f02bcd27fba10d8fb4dcc28173f7a45151f"},
+]
+
+[[package]]
 name = "pyjwt"
 version = "2.9.0"
 requires_python = ">=3.8"
@@ -2022,21 +2050,22 @@ files = [
 
 [[package]]
 name = "pytest"
-version = "8.3.5"
-requires_python = ">=3.8"
+version = "8.4.0"
+requires_python = ">=3.9"
 summary = "pytest: simple powerful testing with Python"
 groups = ["test"]
 dependencies = [
-    "colorama; sys_platform == \"win32\"",
-    "exceptiongroup>=1.0.0rc8; python_version < \"3.11\"",
-    "iniconfig",
-    "packaging",
+    "colorama>=0.4; sys_platform == \"win32\"",
+    "exceptiongroup>=1; python_version < \"3.11\"",
+    "iniconfig>=1",
+    "packaging>=20",
     "pluggy<2,>=1.5",
+    "pygments>=2.7.2",
     "tomli>=1; python_version < \"3.11\"",
 ]
 files = [
-    {file = "pytest-8.3.5-py3-none-any.whl", hash = "sha256:c69214aa47deac29fad6c2a4f590b9c4a9fdb16a403176fe154b79c0b4d4d820"},
-    {file = "pytest-8.3.5.tar.gz", hash = "sha256:f4efe70cc14e511565ac476b57c279e12a855b11f48f212af1080ef2263d3845"},
+    {file = "pytest-8.4.0-py3-none-any.whl", hash = "sha256:f40f825768ad76c0977cbacdf1fd37c6f7a468e460ea6a0636078f8972d4517e"},
+    {file = "pytest-8.4.0.tar.gz", hash = "sha256:14d920b48472ea0dbf68e45b96cd1ffda4705f33307dcc86c676c1b5104838a6"},
 ]
 
 [[package]]
@@ -2160,17 +2189,16 @@ files = [
 
 [[package]]
 name = "redis"
-version = "5.3.0"
+version = "5.2.1"
 requires_python = ">=3.8"
 summary = "Python client for Redis database and key-value store"
 groups = ["default"]
 dependencies = [
-    "PyJWT~=2.9.0",
     "async-timeout>=4.0.3; python_full_version < \"3.11.3\"",
 ]
 files = [
-    {file = "redis-5.3.0-py3-none-any.whl", hash = "sha256:f1deeca1ea2ef25c1e4e46b07f4ea1275140526b1feea4c6459c0ec27a10ef83"},
-    {file = "redis-5.3.0.tar.gz", hash = "sha256:8d69d2dde11a12dc85d0dbf5c45577a5af048e2456f7077d87ad35c1c81c310e"},
+    {file = "redis-5.2.1-py3-none-any.whl", hash = "sha256:ee7e1056b9aea0f04c6c2ed59452947f34c4940ee025f5dd83e6a6418b6989e4"},
+    {file = "redis-5.2.1.tar.gz", hash = "sha256:16f2e22dff21d5125e8481515e386711a34cbec50f0e44413dd7d9c060a54e0f"},
 ]
 
 [[package]]
@@ -2484,13 +2512,13 @@ files = [
 
 [[package]]
 name = "typing-extensions"
-version = "4.13.2"
-requires_python = ">=3.8"
-summary = "Backported and Experimental Type Hints for Python 3.8+"
+version = "4.14.0"
+requires_python = ">=3.9"
+summary = "Backported and Experimental Type Hints for Python 3.9+"
 groups = ["default"]
 files = [
-    {file = "typing_extensions-4.13.2-py3-none-any.whl", hash = "sha256:a439e7c04b49fec3e5d3e2beaa21755cadbbdc391694e28ccdd36ca4a1408f8c"},
-    {file = "typing_extensions-4.13.2.tar.gz", hash = "sha256:e6c81219bd689f51865d9e372991c540bda33a0379d5573cddb9a3a23f7caaef"},
+    {file = "typing_extensions-4.14.0-py3-none-any.whl", hash = "sha256:a1514509136dd0b477638fc68d6a91497af5076466ad0fa6c338e44e359944af"},
+    {file = "typing_extensions-4.14.0.tar.gz", hash = "sha256:8676b788e32f02ab42d9e7c61324048ae4c6d844a399eebace3d4979d75ceef4"},
 ]
 
 [[package]]

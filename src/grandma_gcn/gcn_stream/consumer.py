@@ -1,4 +1,3 @@
-from pathlib import Path
 from celery import chord
 from gcn_kafka import Consumer as KafkaConsumer
 import uuid
@@ -158,56 +157,50 @@ class Consumer(KafkaConsumer):
 
             self.logger.info("Send gw alert to slack")
 
-            path_output_tiling = Path(
-                f"{gw_alert.event_id}_gwemopt_tiling_{uuid.uuid4().hex}"
-            )
-            path_output_galaxy = Path(
-                f"{gw_alert.event_id}_gwemopt_galaxy_{uuid.uuid4().hex}"
-            )
-
             self.logger.info("Sending gwemopt task to celery worker")
 
-            # run two gwemopt tasks, one for tiling and one for galaxy targeting
-            chord_tasks = [
-                gwemopt_task.s(
-                    self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_tiling"],
-                    self.gcn_stream.gcn_config["GWEMOPT"]["tiling_nb_tiles"],
-                    self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
-                    self.gw_alert_channel,
-                    self.gw_channel_id,
-                    self.gcn_stream.gcn_config["OWNCLOUD"],
-                    str(owncloud_alert_url),
-                    path_gw_alert,
-                    str(path_notice),
-                    str(path_output_tiling),
-                    self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
-                    gw_alert.BBH_threshold,
-                    gw_alert.Distance_threshold,
-                    gw_alert.ErrorRegion_threshold,
-                    GW_alert.ObservationStrategy.TILING.name,
-                ),
-                gwemopt_task.s(
-                    self.gcn_stream.gcn_config["GWEMOPT"]["telescopes_galaxy"],
-                    self.gcn_stream.gcn_config["GWEMOPT"]["nb_galaxies"],
-                    self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
-                    self.gw_alert_channel,
-                    self.gw_channel_id,
-                    self.gcn_stream.gcn_config["OWNCLOUD"],
-                    str(owncloud_alert_url),
-                    path_gw_alert,
-                    str(path_notice),
-                    str(path_output_galaxy),
-                    self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
-                    gw_alert.BBH_threshold,
-                    gw_alert.Distance_threshold,
-                    gw_alert.ErrorRegion_threshold,
-                    GW_alert.ObservationStrategy.GALAXYTARGETING.name,
-                    self.gcn_stream.gcn_config["GWEMOPT"]["path_galaxy_catalog"],
-                    self.gcn_stream.gcn_config["GWEMOPT"]["galaxy_catalog"],
-                ),
+            telescopes_list = self.gcn_stream.gcn_config["GWEMOPT"]["telescopes"]
+            number_of_tiles = self.gcn_stream.gcn_config["GWEMOPT"]["number_of_tiles"]
+            observation_strategy = self.gcn_stream.gcn_config["GWEMOPT"][
+                "observation_strategy"
             ]
 
-            chord(chord_tasks)(gwemopt_post_task.s())
+            # construct a list of tasks for each sublist of telescopes, number of tiles and observation strategy
+            gwemopt_tasks = [
+                gwemopt_task.s(
+                    tel_list,
+                    nb_tiles_list,
+                    self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
+                    self.gw_alert_channel,
+                    self.gw_channel_id,
+                    self.gcn_stream.gcn_config["OWNCLOUD"],
+                    str(owncloud_alert_url),
+                    path_gw_alert,
+                    str(path_notice),
+                    "_".join(
+                        [
+                            gw_alert.event_id,
+                            obs_strat,
+                            "_".join(tel_list),
+                            uuid.uuid4().hex,
+                        ]
+                    ),
+                    self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
+                    gw_alert.BBH_threshold,
+                    gw_alert.Distance_threshold,
+                    gw_alert.ErrorRegion_threshold,
+                    obs_strat,
+                    self.gcn_stream.gcn_config["GWEMOPT"]["path_galaxy_catalog"],
+                    self.gcn_stream.gcn_config["GWEMOPT"]["galaxy_catalog"],
+                )
+                for tel_list, nb_tiles_list, obs_strat in zip(
+                    telescopes_list,
+                    number_of_tiles,
+                    observation_strategy,
+                )
+            ]
+
+            chord(gwemopt_tasks)(gwemopt_post_task.s())
 
     def start_poll_loop(
         self, interval_between_polls: int = 1, max_retries: int = 120

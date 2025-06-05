@@ -227,7 +227,7 @@ def test_gwemopt_task_celery(mocker, tmp_path, S241102_update):
                         BBH_threshold,
                         Distance_threshold,
                         ErrorRegion_threshold,
-                        GW_alert.ObservationStrategy.TILING.name,
+                        GW_alert.ObservationStrategy.TILING.value,
                     ]
                 )
 
@@ -278,6 +278,8 @@ def test_process_alert_calls(mocker):
 
                         tiles = pickle.load(open("tests/data/tiles.pickle", "rb"))
                         tiles["KAO"] = None  # Simulate no data for KAO
+                        tiles["Colibri"] = None  # Simulate no data for Colibri
+                        tiles["UBAI-T60S"] = None  # Simulate no data for TCH
                         mock_obs_plan.return_value = (tiles, MagicMock())
 
                         # Patch OwncloudClient.mkdir to track calls
@@ -292,19 +294,19 @@ def test_process_alert_calls(mocker):
                             )
                             consumer.process_alert(notice)
 
-                            # Vérifie que mkdir a été appelé avec le bon argument
+                            # Check that the mkdir calls were made correctly
                             mkdir_args = [
                                 call.args[1] for call in spy_mkdir.call_args_list
                             ]
                             assert (
-                                "Candidates/GW/S241102br/GWEMOPT/UPDATE_fixeduuidhex/TILING"
+                                "Candidates/GW/S241102br/GWEMOPT/UPDATE_fixeduuidhex/TILING_TCH_TRE"
                                 == mkdir_args[7]
                             )
 
-        assert mock_obs_plan.call_count == 2
-        assert mock_post_msg_on_slack.call_count == 5
-        assert mock_open.call_count == 2
-        assert mock_upload.call_count == 2
+        assert mock_obs_plan.call_count == 4
+        assert mock_post_msg_on_slack.call_count == 9
+        assert mock_open.call_count == 4
+        assert mock_upload.call_count == 4
         assert "tiles_coverage_int.png" in str(mock_open.call_args_list[0][0])
         assert (
             mock_upload.call_args_list[0][1]["filename"]
@@ -316,5 +318,5 @@ def test_process_alert_calls(mocker):
 
         assert kwargs["method"] == "MKCOL"
         assert kwargs["url"] == URL(
-            "https://owncloud.example.com/Candidates/GW/S241102br/GWEMOPT/UPDATE_fixeduuidhex/GALAXYTARGETING/plots"
+            "https://owncloud.example.com/Candidates/GW/S241102br/GWEMOPT/UPDATE_fixeduuidhex/GALAXYTARGETING_KAO_Colibri/plots"
         )

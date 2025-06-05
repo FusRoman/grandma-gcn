@@ -539,7 +539,16 @@ class GW_alert:
             ObservationStrategy
                 the corresponding ObservationStrategy enum value
             """
-            return cls[strategy] if strategy in cls.__members__ else None
+            match strategy:
+                case "Tiling":
+                    return cls.TILING
+                case "Galaxy targeting":
+                    return cls.GALAXYTARGETING
+                case _:
+                    raise ValueError(
+                        f"Unknown observation strategy: {strategy}. "
+                        "Expected 'Tiling' or 'Galaxy targeting'."
+                    )
 
         def to_emoji(self) -> str:
             """

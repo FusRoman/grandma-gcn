@@ -25,10 +25,9 @@ gw_alert_channel = "#test_gwalerts"
 gw_alert_channel_id = "fake_id"
 
 [GWEMOPT]
-telescopes_tiling = ["TCH", "TRE", "TCA", "FZU-CTA-N", "FZU-Auger"]
-tiling_nb_tiles = [10, 10, 10, 15, 15]
-telescopes_galaxy = ["KAO"]
-nb_galaxies = [10]
+telescopes = [["TCH", "TRE"], ["TCA", "FZU-CTA-N"], ["FZU-Auger", "UBAI-T60S"], ["KAO", "Colibri"]]
+number_of_tiles = [[10, 10], [10, 15], [15, 10], [10, 10]]
+observation_strategy = ["Tiling", "Tiling", "Galaxy targeting", "Galaxy targeting"]
 nside_flat = 64
 path_galaxy_catalog = "catalogs/"
 galaxy_catalog = "mangrove"
