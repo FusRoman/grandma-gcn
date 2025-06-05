@@ -285,7 +285,9 @@ def gwemopt_task(
         )
 
     alert_url_subpart = owncloud_client.get_url_subpart(owncloud_gwemopt_url, 5)
-    obs_strategy_owncloud_path = alert_url_subpart + f"/{obs_strategy.name}"
+    obs_strategy_owncloud_path = (
+        alert_url_subpart + f"/{obs_strategy.name}_{"_".join(telescopes)}"
+    )
     # create specific observation strategy owncloud folder
     obs_strategy_owncloud_url_folder = owncloud_client.mkdir(obs_strategy_owncloud_path)
 
@@ -387,7 +389,7 @@ def gwemopt_task(
                     permalink = post_image_on_slack(
                         worker_slack_client,
                         filepath=output_path / "tiles_coverage_int.png",
-                        filetitle=f"{gw_alert.event_id} {obs_strategy.value} Coverage Map",
+                        filetitle=f"{gw_alert.event_id} {obs_strategy.value} {"_".join(telescopes)} Coverage Map",
                         filename=f"coverage_{gw_alert.event_id}_{obs_strategy.value}_map.png",
                         channel_id=channel_id,
                     )
@@ -438,17 +440,12 @@ def gwemopt_post_task(results):
         A tuple containing the path to the notice file and the path to the output directory.
     """
 
-    res_tiling, res_galaxy = results
-
-    path_notice = Path(res_tiling[0])
+    path_notice = Path(results[0][0])
     # remove the notice file after processing
     path_notice.unlink()
 
-    folder_gwemopt_output_tiling = Path(res_tiling[1])
-    folder_gwemopt_output_galaxy = Path(res_galaxy[1])
-
-    if folder_gwemopt_output_tiling.exists() and folder_gwemopt_output_tiling.is_dir():
-        shutil.rmtree(folder_gwemopt_output_tiling)
-
-    if folder_gwemopt_output_galaxy.exists() and folder_gwemopt_output_galaxy.is_dir():
-        shutil.rmtree(folder_gwemopt_output_galaxy)
+    for _, path_gwemopt_output in results:
+        folder_gwemopt_output = Path(path_gwemopt_output)
+        # remove the output directory after processing
+        if folder_gwemopt_output.exists() and folder_gwemopt_output.is_dir():
+            shutil.rmtree(folder_gwemopt_output)

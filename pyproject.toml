@@ -1,6 +1,6 @@
 [project]
 name = "grandma-gcn"
-version = "3.0.0"
+version = "4.0.0"
 description = "Automated ingestion, analysis, and distribution of gravitational wave (GW) alerts for the GRANDMA collaboration. Provides real-time GCN alert processing, observation strategy generation (gwemopt), Slack and OwnCloud integration, and Celery-based automation."
 authors = [{ name = "Roman", email = "roman.lemontagner@gmail.com" }]
 dependencies = [
@@ -14,7 +14,7 @@ dependencies = [
     "astropy-healpix>=1.1.2",
     "celery[redis]>=5.5.2",
     "dotenv>=0.9.9",
-    "gwemopt @ git+https://github.com/FusRoman/old_gwemopt@v1.1.1",
+    "gwemopt @ git+https://github.com/FusRoman/old_gwemopt@v1.2.0",
     "ligo-skymap>=2.4.0",
     "yarl>=1.20.0",
     "spherical-geometry>=1.3.3",

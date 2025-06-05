@@ -130,10 +130,11 @@ gw_alert_channel = "#your_slack_channel"
 gw_alert_channel_id = "your_slack_channel_id"
 
 [GWEMOPT]
-telescopes_tiling = ["TCH", "TRE"]
-tiling_nb_tiles = [10, 10]
-telescopes_galaxy = ["KAO"]
-nb_galaxies = [10]
+# You can now specify several independent GWEMOPT tasks by providing lists of lists.
+# Each sublist corresponds to a separate GWEMOPT task (e.g., for different telescope groups or strategies).
+telescopes = [["TCH", "TRE"], ["TCA", "FZU-CTA-N"], ["FZU-Auger", "UBAI-T60S"], ["KAO", "Colibri"]]
+number_of_tiles = [[10, 10], [10, 15], [15, 10], [10, 10]]
+observation_strategy = ["Tiling", "Tiling", "Galaxy targeting", "Galaxy targeting"]
 nside_flat = 512
 path_galaxy_catalog = "catalogs/"
 galaxy_catalog = "mangrove"
@@ -148,6 +149,12 @@ base_url = "https://your-owncloud-instance/remote.php/dav/files/your_owncloud_us
 - Kafka client `id` and `secret` for GCN stream access.
 - Slack bot token (`FINK_SLACK_TOKEN` in `.env`), channel name, and channel ID.
 - OwnCloud username, password, and WebDAV base URL.
+
+#### Notes on GWEMOPT configuration
+
+- The `[GWEMOPT]` section now supports launching multiple independent GWEMOPT tasks in parallel.
+- Each entry in `telescopes`, `number_of_tiles`, and `observation_strategy` must be a list of the same length, where each sublist or value defines the configuration for one GWEMOPT task.
+- For example, the first GWEMOPT task will use telescopes `["TCH", "TRE"]` with `[10, 10]` tiles and `"Tiling"` strategy, the second task will use `["TCA", "FZU-CTA-N"]` with `[10, 15]` tiles and `"Tiling"` strategy, etc.
 
 ### Running the E2E test
 
