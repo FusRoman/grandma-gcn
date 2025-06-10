@@ -26,10 +26,10 @@ services:
         - PROJECT_GID=${PROJECT_GID}
     user: "${PROJECT_UID}:${PROJECT_GID}"
     volumes:
-      - ../grandma-gcn:/home/${USR}/code/
       - e2e_volume:/shared-tmp
     depends_on:
       - celery_worker
+      - init_volume
     command:
       [
         "python",
@@ -50,7 +50,6 @@ services:
     depends_on:
       - redis
     volumes:
-      - ../grandma-gcn:/home/${USR}/code/
       - e2e_volume:/shared-tmp
     command:
       [
