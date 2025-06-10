@@ -1,4 +1,3 @@
-from pathlib import Path
 import pytest
 
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
@@ -7,58 +6,6 @@ from astropy.time import Time
 from numpy import inf, logical_not, isinf, mean
 
 from astropy.table import Table
-
-
-@pytest.fixture
-def path_tests():
-    basedir = Path.absolute(Path(__file__).parents[1])
-    return Path(basedir, "tests")
-
-
-def open_notice_file(path_test, name_file):
-    path_notice = Path(path_test, "notice_examples", name_file)
-    with open(path_notice, "rb") as fp:
-        return fp.read()
-
-
-@pytest.fixture
-def gw_alert_unsignificant(
-    path_tests,
-) -> GW_alert:
-    bytes_notice = open_notice_file(path_tests, "gw_notice_unsignificant.json")
-    return GW_alert(bytes_notice, 0.5, 100, 100)
-
-
-@pytest.fixture
-def gw_alert_significant(
-    path_tests,
-) -> GW_alert:
-    bytes_notice = open_notice_file(path_tests, "gw_notice_significant.json")
-    return GW_alert(bytes_notice, 0.5, 100, 100)
-
-
-@pytest.fixture
-def S241102_initial(
-    path_tests,
-) -> GW_alert:
-    bytes_notice = open_notice_file(path_tests, "S241102br-initial.json")
-    return GW_alert(bytes_notice, 0.5, 500, 100)
-
-
-@pytest.fixture
-def S241102_preliminary(
-    path_tests,
-) -> GW_alert:
-    bytes_notice = open_notice_file(path_tests, "S241102br-preliminary.json")
-    return GW_alert(bytes_notice, 0.5, 100, 100)
-
-
-@pytest.fixture
-def S241102_update(
-    path_tests,
-) -> GW_alert:
-    bytes_notice = open_notice_file(path_tests, "S241102br-update.json")
-    return GW_alert(bytes_notice, 0.5, 100, 100)
 
 
 def test_gw_alert_unsignificant(gw_alert_unsignificant: GW_alert):
@@ -229,9 +176,14 @@ def test_gw_score_terrestrial(gw_alert_significant: GW_alert):
 
 def test_gw_score_bbh_far_badly_localized(S241102_update: GW_alert):
     # BBH, far and badly localized, should be score 1, NO_GRANDMA
-    S241102_update.BBH_threshold = 0.0  # force threshold to always pass
-    S241102_update.Distance_threshold = 1  # force to fail distance
-    S241102_update.ErrorRegion_threshold = 1  # force to fail region
+
+    S241102_update.thresholds = {
+        "BBH_proba": 0.0,  # force threshold to always pass
+        "Distance_cut": 1,  # force to fail distance
+        "BNS_NSBH_size_cut": 1,  # force to fail region
+        "BBH_size_cut": 1,  # force to fail region
+    }
+
     score, msg, action = S241102_update.gw_score()
     assert score == 1
     assert "far and badly localized BBH event" in msg
@@ -240,9 +192,14 @@ def test_gw_score_bbh_far_badly_localized(S241102_update: GW_alert):
 
 def test_gw_score_bbh_interesting(S241102_initial: GW_alert):
     # BBH, well localized and close, should be score 2, GO_GRANDMA
-    S241102_initial.BBH_threshold = 0.0  # force threshold to always pass
-    S241102_initial.Distance_threshold = 1000  # large enough
-    S241102_initial.ErrorRegion_threshold = 1000  # large enough
+
+    S241102_initial.thresholds = {
+        "BBH_proba": 0.0,  # force threshold to always pass
+        "Distance_cut": 1000,  # large enough
+        "BNS_NSBH_size_cut": 1000,  # large enough
+        "BBH_size_cut": 1000,  # large enough
+    }
+
     score, msg, action = S241102_initial.gw_score()
     assert score == 2
     assert "very interesting event" in msg
@@ -252,8 +209,14 @@ def test_gw_score_bbh_interesting(S241102_initial: GW_alert):
 def test_gw_score_bns_extremely_interesting(S241102_initial: GW_alert):
     # Simulate a BNS, well localized and close, should be score 3, GO_GRANDMA
     S241102_initial.gw_dict["event"]["classification"] = {"BNS": 0.99}
-    S241102_initial.Distance_threshold = 1000
-    S241102_initial.ErrorRegion_threshold = 1000
+
+    S241102_initial.thresholds = {
+        "BBH_proba": 0.0,  # force threshold to always pass
+        "Distance_cut": 1000,  # large enough
+        "BNS_NSBH_size_cut": 1000,  # large enough
+        "BBH_size_cut": 1000,  # large enough
+    }
+
     score, msg, action = S241102_initial.gw_score()
     assert score == 3
     assert "EXTREMELY interesting event" in msg
@@ -263,8 +226,14 @@ def test_gw_score_bns_extremely_interesting(S241102_initial: GW_alert):
 def test_gw_score_bns_interesting_far(S241102_initial: GW_alert):
     # Simulate a BNS, far or badly localized, should be score 2, GO_GRANDMA
     S241102_initial.gw_dict["event"]["classification"] = {"BNS": 0.99}
-    S241102_initial.Distance_threshold = 1  # force to fail distance
-    S241102_initial.ErrorRegion_threshold = 1  # force to fail region
+
+    S241102_initial.thresholds = {
+        "BBH_proba": 0.0,  # force threshold to always pass
+        "Distance_cut": 1,  # force to fail distance
+        "BNS_NSBH_size_cut": 1,  # force to fail region
+        "BBH_size_cut": 1,  # force to fail region
+    }
+
     score, msg, action = S241102_initial.gw_score()
     assert score == 2
     assert "very interesting event" in msg

@@ -62,20 +62,59 @@ def save_as_json(dict_notice: dict, save_path: Path) -> None:
 
 
 class GW_alert:
-    def __init__(
-        self,
-        notice: bytes,
-        BBH_threshold: float,
-        Distance_threshold: float,
-        ErrorRegion_threshold: float,
-    ) -> None:
+    def __init__(self, notice: bytes, thresholds: dict[str, float | int]) -> None:
         self.gw_dict = bytes_to_dict(notice)
-
-        self.BBH_threshold = BBH_threshold
-        self.Distance_threshold = Distance_threshold
-        self.ErrorRegion_threshold = ErrorRegion_threshold
+        self.thresholds = thresholds
 
         self.logger = logging.getLogger("gcn_stream.gw_alert_{}".format(self.event_id))
+
+    @property
+    def BBH_proba(self) -> float | None:
+        """
+        Get the terrestrial threshold for the event
+
+        Returns
+        -------
+        float
+            the terrestrial threshold
+        """
+        return self.thresholds.get("BBH_proba")
+
+    @property
+    def BBH_size_cut(self) -> float | None:
+        """
+        Get the BBH size cut for the event
+
+        Returns
+        -------
+        float
+            the BBH size cut
+        """
+        return self.thresholds.get("BBH_size_cut")
+
+    @property
+    def BNSBH_size_cut(self) -> float | None:
+        """
+        Get the BNSBH size cut for the event
+
+        Returns
+        -------
+        float
+            the BNSBH size cut
+        """
+        return self.thresholds.get("BNS_NSBH_size_cut")
+
+    @property
+    def Distance_threshold(self) -> float | None:
+        """
+        Get the distance threshold for the event
+
+        Returns
+        -------
+        float
+            the distance threshold
+        """
+        return self.thresholds.get("Distance_cut")
 
     @property
     def event(self) -> dict[str, Any]:
@@ -432,10 +471,10 @@ class GW_alert:
                             "please wait for any retractation message in the next 30 min"
                         )
                     case self.CBC_proba.BBH:
-                        if self.class_proba(self.CBC_proba.BBH) > self.BBH_threshold:
+                        if self.class_proba(self.CBC_proba.BBH) > self.BBH_proba:
                             if (
                                 mean_dist < self.Distance_threshold
-                                and size_region < self.ErrorRegion_threshold
+                                and size_region < self.BBH_size_cut
                             ):
                                 msg = "FA, it is a very interesting event, well localized but maybe no counterpart"
                                 score = 2
@@ -447,7 +486,7 @@ class GW_alert:
                     case self.CBC_proba.NSBH | self.CBC_proba.BNS:
                         if (
                             mean_dist < self.Distance_threshold
-                            and size_region < self.ErrorRegion_threshold
+                            and size_region < self.BNSBH_size_cut
                         ):
                             msg = "FA, it is a very EXTREMELY interesting event, well localized"
                             score = 3

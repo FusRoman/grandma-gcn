@@ -1,4 +1,3 @@
-import pickle
 import tempfile
 import logging
 
@@ -11,9 +10,10 @@ from unittest.mock import patch, MagicMock
 from pathlib import Path
 
 from grandma_gcn.worker.gwemopt_worker import gwemopt_task
-from tests.test_gw_alert import open_notice_file
+from tests.conftest import open_notice_file
 from grandma_gcn.worker.celery_app import celery
 from grandma_gcn.worker.owncloud_client import OwncloudClient
+from astropy.table import Table
 
 
 @pytest.fixture(autouse=True)
@@ -224,9 +224,12 @@ def test_gwemopt_task_celery(mocker, tmp_path, S241102_update):
                         str(notice_path),
                         str(path_output),
                         str(tmp_path),
-                        BBH_threshold,
-                        Distance_threshold,
-                        ErrorRegion_threshold,
+                        {
+                            "BBH_proba": BBH_threshold,
+                            "Distance_cut": Distance_threshold,
+                            "BNS_NSBH_size_cut": ErrorRegion_threshold,
+                            "BBH_size_cut": ErrorRegion_threshold,
+                        },
                         GW_alert.ObservationStrategy.TILING.value,
                     ]
                 )
@@ -234,7 +237,7 @@ def test_gwemopt_task_celery(mocker, tmp_path, S241102_update):
             assert mock_obs_plan.called
 
 
-def test_process_alert_calls(mocker):
+def test_process_alert_calls(mocker, tiles: dict[str, Table]):
     from grandma_gcn.gcn_stream.consumer import Consumer
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -270,38 +273,59 @@ def test_process_alert_calls(mocker):
                     "grandma_gcn.slackbot.gw_message.open", create=True
                 ) as mock_open:
                     with patch("slack_sdk.WebClient.files_upload_v2") as mock_upload:
-                        mock_upload.return_value = {
-                            "file": {"permalink_public": "https://fake_url"}
-                        }
+                        # Patch open for ascii_tiles_path write
+                        with patch(
+                            "grandma_gcn.worker.gwemopt_worker.open", create=True
+                        ) as mock_ascii_open:
 
-                        mock_open.return_value.__enter__.return_value = MagicMock()
+                            # We mock only the "w" mode for ascii_open
+                            # to simulate writing the ascii tiles file.
+                            # For other modes, we use the real open function.
+                            def open_side_effect(file, mode="r", *args, **kwargs):
+                                if mode == "w":
+                                    mock_file = MagicMock()
+                                    mock_file.__enter__.return_value = MagicMock()
+                                    return mock_file
+                                else:
+                                    # For other modes, use the real open
+                                    from builtins import open as real_open
 
-                        tiles = pickle.load(open("tests/data/tiles.pickle", "rb"))
-                        tiles["KAO"] = None  # Simulate no data for KAO
-                        tiles["Colibri"] = None  # Simulate no data for Colibri
-                        tiles["UBAI-T60S"] = None  # Simulate no data for TCH
-                        mock_obs_plan.return_value = (tiles, MagicMock())
+                                    return real_open(file, mode, *args, **kwargs)
 
-                        # Patch OwncloudClient.mkdir to track calls
-                        with patch.object(
-                            OwncloudClient,
-                            "mkdir",
-                            autospec=True,
-                            wraps=OwncloudClient.mkdir,
-                        ) as spy_mkdir:
-                            consumer = Consumer(
-                                gcn_stream=mock_gcn_stream, logger=logging.getLogger()
-                            )
-                            consumer.process_alert(notice)
+                            mock_ascii_open.side_effect = open_side_effect
 
-                            # Check that the mkdir calls were made correctly
-                            mkdir_args = [
-                                call.args[1] for call in spy_mkdir.call_args_list
-                            ]
-                            assert (
-                                "Candidates/GW/S241102br/GWEMOPT/UPDATE_fixeduuidhex/TILING_TCH_TRE"
-                                == mkdir_args[7]
-                            )
+                            mock_upload.return_value = {
+                                "file": {"permalink_public": "https://fake_url"}
+                            }
+
+                            mock_open.return_value.__enter__.return_value = MagicMock()
+
+                            tiles["KAO"] = None  # Simulate no data for KAO
+                            tiles["Colibri"] = None  # Simulate no data for Colibri
+                            tiles["UBAI-T60S"] = None  # Simulate no data for TCH
+                            mock_obs_plan.return_value = (tiles, MagicMock())
+
+                            # Patch OwncloudClient.mkdir to track calls
+                            with patch.object(
+                                OwncloudClient,
+                                "mkdir",
+                                autospec=True,
+                                wraps=OwncloudClient.mkdir,
+                            ) as spy_mkdir:
+                                consumer = Consumer(
+                                    gcn_stream=mock_gcn_stream,
+                                    logger=logging.getLogger(),
+                                )
+                                consumer.process_alert(notice)
+
+                                # Check that the mkdir calls were made correctly
+                                mkdir_args = [
+                                    call.args[1] for call in spy_mkdir.call_args_list
+                                ]
+                                assert (
+                                    "Candidates/GW/S241102br/GWEMOPT/UPDATE_fixeduuidhex/TILING_TCH_TRE"
+                                    == mkdir_args[7]
+                                )
 
         assert mock_obs_plan.call_count == 4
         assert mock_post_msg_on_slack.call_count == 9

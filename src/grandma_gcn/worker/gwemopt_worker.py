@@ -227,9 +227,7 @@ def gwemopt_task(
     path_notice: str,
     path_output: str,
     path_log: str,
-    BBH_threshold: float,
-    Distance_threshold: float,
-    ErrorRegion_threshold: float,
+    threshold_config: dict[str, float | int],
     obs_strategy: str,
     path_galaxy_catalog: str | None = None,
     galaxy_catalog: str | None = None,
@@ -250,20 +248,22 @@ def gwemopt_task(
     channel_id : str
         The Slack channel ID to send the notification to.
         Different from slack_channel, this is the ID used by the Slack API.
+    owncloud_config : dict[str, Any]
+        Configuration dictionary for the ownCloud client, containing the username and password.
     owncloud_gwemopt_url : str
         The URL for the ownCloud instance where the results will be stored.
     path_gw_alert : str
         Path to the gw alert folder on OWNCLOUD.
-    path_output : str
-        Path to the output directory.
     path_notice : str
         Path to the GCN notice file.
-    BBH_threshold : float
-        Threshold for BBH probability.
-    Distance_threshold : float
-        Threshold for distance cut.
-    ErrorRegion_threshold : float
-        Threshold for size region cut.
+    path_output : str
+        Path to the output directory.
+    path_log : str
+        Path to the log directory.
+    threshold_config : dict[str, float | int]
+        Configuration dictionary for the thresholds to use in the gwemopt task.
+    obs_strategy : str
+        The observation strategy to use, as a string. It should be one of the values in `GW_alert.ObservationStrategy`.
     path_galaxy_catalog : str
         Path to the galaxy catalog directory.
     galaxy_catalog : str
@@ -300,15 +300,15 @@ def gwemopt_task(
         GalaxyCatalog.from_string(galaxy_catalog) if galaxy_catalog else None
     )
 
+    # temporary logger in case of a failure before the logger is set up
+    logger = logging.getLogger("gwemopt_task")
+
     try:
         with open(path_notice, "rb") as fp:
             json_byte = fp.read()
 
         gw_alert = GW_alert(
-            json_byte,
-            BBH_threshold=BBH_threshold,
-            Distance_threshold=Distance_threshold,
-            ErrorRegion_threshold=ErrorRegion_threshold,
+            json_byte, thresholds=threshold_config
         )  # Configure a logger specific to this task
 
         logger, log_file_path = setup_task_logger(
@@ -369,9 +369,15 @@ def gwemopt_task(
 
                 logger.info("Successfully pushed data files to ownCloud.")
 
+                ascii_tiles_path = output_path / "tiles_ascii.txt"
                 # Upload the tiles table in custom ASCII format to ownCloud
                 for k, v in tiles.items():
                     gwemopt_ascii_tiles = table_to_custom_ascii(k, v)
+
+                    # write the ASCII tiles to a file
+                    with open(ascii_tiles_path, "w") as f:
+                        f.write(gwemopt_ascii_tiles)
+
                     owncloud_client.put_data(
                         data=gwemopt_ascii_tiles.encode("utf-8"),
                         url=obs_strategy_owncloud_url_folder,
@@ -422,26 +428,97 @@ def gwemopt_task(
         logger.error(f"An error occurred while processing the task: {e}")
         raise e
 
-    return str(path_notice), str(output_path)
+    # Return the paths to the galaxy tiles file in order to merge them later and create the 'ALL.txt' file
+    path_galaxy_tiles = (
+        str(ascii_tiles_path)
+        if obs_strategy == GW_alert.ObservationStrategy.GALAXYTARGETING
+        else None
+    )
+    return (
+        str(path_notice),
+        str(output_path),
+        (path_galaxy_tiles, str(obs_strategy_owncloud_url_folder)),
+    )
+
+
+def merge_galaxy_file(
+    owncloud_config: dict[str, Any],
+    obs_strategy_owncloud_url_folder: URL,
+    ascii_file_path: list[str],
+):
+    """
+    Merge the galaxy targeting results from the output directory into a single file named 'ALL.txt'.
+    The file is then send to the ownCloud instance.
+    This function is intended to be run after the gwemopt task has completed.
+
+    Parameters
+    ----------
+    obs_strategy_owncloud_url_folder : str
+        The URL of the ownCloud folder where the merged file will be uploaded.
+    owncloud_config : dict[str, Any]
+        Configuration dictionary for the ownCloud client, containing the username and password.
+    ascii_file_path : list[str]
+        List of paths to the ASCII files containing the galaxy targeting results.
+    """
+    # Initialize the ownCloud client and URL
+    owncloud_client = OwncloudClient(owncloud_config)
+    obs_strategy_owncloud_url_folder = URL(obs_strategy_owncloud_url_folder)
+
+    merge_results = []
+    # Implementation goes here
+    for path in ascii_file_path:
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"The path {path} does not exist.")
+        with open(path, "r") as f:
+            merge_results.append(f.read())
+
+    all_ascii = "\n\n".join(merge_results)
+
+    owncloud_client.put_data(
+        data=all_ascii.encode("utf-8"),
+        url=obs_strategy_owncloud_url_folder,
+        owncloud_filename="ALL.txt",
+    )
 
 
 @celery.task(name="gwemopt_post_task")
-def gwemopt_post_task(results):
+def gwemopt_post_task(
+    results: tuple[str, str, tuple[str, str]], owncloud_config: dict[str, Any]
+) -> None:
     """
     Task to clean up after the gwemopt task has completed.
     This task removes the notice file and the output directory created by the gwemopt task.
 
     Parameters
     ----------
-    results : tuple[str, str]
+    results : tuple[str, str, tuple[str, str]]
         A tuple containing the path to the notice file and the path to the output directory.
+    owncloud_config : dict[str, Any]
+        Configuration dictionary for the ownCloud client, containing the username and password.
+    path_log : str
+        Path to the log directory where the task logs will be stored.
     """
+
+    # results is a list of tuples (path_notice, path_gwemopt_output, (path_ascii, obs_strategy_owncloud_url_folder))
+    path_ascii = [
+        path_ascii for _, _, (path_ascii, _) in results if path_ascii is not None
+    ]
+    owncloud_url = URL(results[0][2][1]).parent
+    if len(path_ascii) > 0:
+        # merge the galaxy targeting results into a single file named 'ALL.txt'
+        # and upload it to the ownCloud instance
+        merge_galaxy_file(
+            owncloud_config=owncloud_config,
+            obs_strategy_owncloud_url_folder=owncloud_url,
+            ascii_file_path=path_ascii,
+        )
 
     path_notice = Path(results[0][0])
     # remove the notice file after processing
     path_notice.unlink()
 
-    for _, path_gwemopt_output in results:
+    for _, path_gwemopt_output, _ in results:
         folder_gwemopt_output = Path(path_gwemopt_output)
         # remove the output directory after processing
         if folder_gwemopt_output.exists() and folder_gwemopt_output.is_dir():
