@@ -402,7 +402,7 @@ def gwemopt_task(
                     execution_time=(Time.now() - start_task).sec,
                     obs_strategy=obs_strategy,
                     telescopes=telescopes,
-                    path_gw_alert=path_gw_alert,
+                    path_gw_alert=obs_strategy_owncloud_path,
                 )
 
                 logger.info("gwemopt post message successfully sent to Slack.")
