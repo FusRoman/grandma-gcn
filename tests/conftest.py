@@ -46,19 +46,28 @@ def open_notice_file(path_test, name_file):
 
 
 @pytest.fixture
-def gw_alert_unsignificant(
-    path_tests,
-) -> GW_alert:
-    bytes_notice = open_notice_file(path_tests, "gw_notice_unsignificant.json")
-    return GW_alert(bytes_notice, 0.5, 100, 100)
+def threshold_config() -> dict[str, float]:
+    """
+    Fixture to provide the threshold configuration for GW alerts
+    """
+    return {
+        "BBH_proba": 0.5,  # between 0 and 1
+        "Distance_cut": 100,  # in Mpc
+        "BNS_NSBH_size_cut": 100,  # in deg²
+        "BBH_size_cut": 100,  # in deg²
+    }
 
 
 @pytest.fixture
-def gw_alert_significant(
-    path_tests,
-) -> GW_alert:
+def gw_alert_unsignificant(path_tests, threshold_config) -> GW_alert:
+    bytes_notice = open_notice_file(path_tests, "gw_notice_unsignificant.json")
+    return GW_alert(bytes_notice, thresholds=threshold_config)
+
+
+@pytest.fixture
+def gw_alert_significant(path_tests, threshold_config) -> GW_alert:
     bytes_notice = open_notice_file(path_tests, "gw_notice_significant.json")
-    return GW_alert(bytes_notice, 0.5, 100, 100)
+    return GW_alert(bytes_notice, thresholds=threshold_config)
 
 
 @pytest.fixture
@@ -66,23 +75,25 @@ def S241102_initial(
     path_tests,
 ) -> GW_alert:
     bytes_notice = open_notice_file(path_tests, "S241102br-initial.json")
-    return GW_alert(bytes_notice, 0.5, 500, 100)
+    specific_thresholds = {
+        "BBH_proba": 0.5,  # between 0 and 1
+        "Distance_cut": 500,  # in Mpc
+        "BNS_NSBH_size_cut": 100,  # in deg²
+        "BBH_size_cut": 100,  # in deg²
+    }
+    return GW_alert(bytes_notice, thresholds=specific_thresholds)
 
 
 @pytest.fixture
-def S241102_preliminary(
-    path_tests,
-) -> GW_alert:
+def S241102_preliminary(path_tests, threshold_config) -> GW_alert:
     bytes_notice = open_notice_file(path_tests, "S241102br-preliminary.json")
-    return GW_alert(bytes_notice, 0.5, 100, 100)
+    return GW_alert(bytes_notice, thresholds=threshold_config)
 
 
 @pytest.fixture
-def S241102_update(
-    path_tests,
-) -> GW_alert:
+def S241102_update(path_tests, threshold_config) -> GW_alert:
     bytes_notice = open_notice_file(path_tests, "S241102br-update.json")
-    return GW_alert(bytes_notice, 0.5, 100, 100)
+    return GW_alert(bytes_notice, thresholds=threshold_config)
 
 
 @pytest.fixture

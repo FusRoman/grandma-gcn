@@ -227,9 +227,7 @@ def gwemopt_task(
     path_notice: str,
     path_output: str,
     path_log: str,
-    BBH_threshold: float,
-    Distance_threshold: float,
-    ErrorRegion_threshold: float,
+    threshold_config: dict[str, float | int],
     obs_strategy: str,
     path_galaxy_catalog: str | None = None,
     galaxy_catalog: str | None = None,
@@ -262,12 +260,8 @@ def gwemopt_task(
         Path to the output directory.
     path_log : str
         Path to the log directory.
-    BBH_threshold : float
-        Threshold for BBH probability.
-    Distance_threshold : float
-        Threshold for distance cut.
-    ErrorRegion_threshold : float
-        Threshold for size region cut.
+    threshold_config : dict[str, float | int]
+        Configuration dictionary for the thresholds to use in the gwemopt task.
     obs_strategy : str
         The observation strategy to use, as a string. It should be one of the values in `GW_alert.ObservationStrategy`.
     path_galaxy_catalog : str
@@ -314,10 +308,7 @@ def gwemopt_task(
             json_byte = fp.read()
 
         gw_alert = GW_alert(
-            json_byte,
-            BBH_threshold=BBH_threshold,
-            Distance_threshold=Distance_threshold,
-            ErrorRegion_threshold=ErrorRegion_threshold,
+            json_byte, thresholds=threshold_config
         )  # Configure a logger specific to this task
 
         logger, log_file_path = setup_task_logger(
@@ -492,14 +483,16 @@ def merge_galaxy_file(
 
 
 @celery.task(name="gwemopt_post_task")
-def gwemopt_post_task(results, owncloud_config: dict[str, Any]) -> None:
+def gwemopt_post_task(
+    results: tuple[str, str, tuple[str, str]], owncloud_config: dict[str, Any]
+) -> None:
     """
     Task to clean up after the gwemopt task has completed.
     This task removes the notice file and the output directory created by the gwemopt task.
 
     Parameters
     ----------
-    results : tuple[str, str]
+    results : tuple[str, str, tuple[str, str]]
         A tuple containing the path to the notice file and the path to the output directory.
     owncloud_config : dict[str, Any]
         Configuration dictionary for the ownCloud client, containing the username and password.
@@ -507,11 +500,14 @@ def gwemopt_post_task(results, owncloud_config: dict[str, Any]) -> None:
         Path to the log directory where the task logs will be stored.
     """
 
+    # results is a list of tuples (path_notice, path_gwemopt_output, (path_ascii, obs_strategy_owncloud_url_folder))
     path_ascii = [
         path_ascii for _, _, (path_ascii, _) in results if path_ascii is not None
     ]
     owncloud_url = URL(results[0][2][1]).parent
     if len(path_ascii) > 0:
+        # merge the galaxy targeting results into a single file named 'ALL.txt'
+        # and upload it to the ownCloud instance
         merge_galaxy_file(
             owncloud_config=owncloud_config,
             obs_strategy_owncloud_url_folder=owncloud_url,

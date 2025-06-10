@@ -10,7 +10,7 @@ from yarl import URL
 
 from grandma_gcn.gcn_stream.consumer import Consumer
 from grandma_gcn.gcn_stream.gcn_logging import init_logging
-from tests.test_gw_alert import open_notice_file
+from tests.conftest import open_notice_file
 
 
 def test_init_gcn_stream(gcn_config_path, logger):

@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from pytest import mark
 
-from tests.test_gw_alert import open_notice_file
+from tests.conftest import open_notice_file
 
 import time
 

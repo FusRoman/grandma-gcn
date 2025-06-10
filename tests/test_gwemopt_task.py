@@ -10,7 +10,7 @@ from unittest.mock import patch, MagicMock
 from pathlib import Path
 
 from grandma_gcn.worker.gwemopt_worker import gwemopt_task
-from tests.test_gw_alert import open_notice_file
+from tests.conftest import open_notice_file
 from grandma_gcn.worker.celery_app import celery
 from grandma_gcn.worker.owncloud_client import OwncloudClient
 from astropy.table import Table
@@ -224,9 +224,12 @@ def test_gwemopt_task_celery(mocker, tmp_path, S241102_update):
                         str(notice_path),
                         str(path_output),
                         str(tmp_path),
-                        BBH_threshold,
-                        Distance_threshold,
-                        ErrorRegion_threshold,
+                        {
+                            "BBH_proba": BBH_threshold,
+                            "Distance_cut": Distance_threshold,
+                            "BNS_NSBH_size_cut": ErrorRegion_threshold,
+                            "BBH_size_cut": ErrorRegion_threshold,
+                        },
                         GW_alert.ObservationStrategy.TILING.value,
                     ]
                 )

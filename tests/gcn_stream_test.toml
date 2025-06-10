@@ -15,10 +15,11 @@ gcn_stream_log_path = "gcn_stream_test.log"
 notice_path = "notices"
 celery_task_log_path = "gwemopt_task"
 
-[Threshold]
+[THRESHOLD]
 BBH_proba = 0.5       # between 0 and 1
 Distance_cut = 500    # in Mpc
-Size_region_cut = 500 # in deg²
+BNS_NSBH_size_cut = 500 # in deg²
+BBH_size_cut = 500 # in deg²
 
 [Slack]
 gw_alert_channel = "#test_gwalerts"

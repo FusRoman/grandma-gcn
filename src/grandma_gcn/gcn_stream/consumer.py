@@ -141,11 +141,7 @@ class Consumer(KafkaConsumer):
 
         gw_alert = GW_alert(
             notice,
-            BBH_threshold=self.gcn_stream.gcn_config["Threshold"]["BBH_proba"],
-            Distance_threshold=self.gcn_stream.gcn_config["Threshold"]["Distance_cut"],
-            ErrorRegion_threshold=self.gcn_stream.gcn_config["Threshold"][
-                "Size_region_cut"
-            ],
+            self.gcn_stream.gcn_config["THRESHOLD"],
         )
         score, _, _ = gw_alert.gw_score()
         if score > 1:
@@ -202,9 +198,7 @@ class Consumer(KafkaConsumer):
                         ]
                     ),
                     self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
-                    gw_alert.BBH_threshold,
-                    gw_alert.Distance_threshold,
-                    gw_alert.ErrorRegion_threshold,
+                    gw_alert.thresholds,
                     obs_strat,
                     self.gcn_stream.gcn_config["GWEMOPT"]["path_galaxy_catalog"],
                     self.gcn_stream.gcn_config["GWEMOPT"]["galaxy_catalog"],
