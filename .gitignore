@@ -179,3 +179,6 @@ S25*
 fake_path_log
 test_owncloud.py
 gwemopt_task
+coverage_S241102br_Tiling_map.png
+galaxies_table.pickle
+test_coverage_tiles.py

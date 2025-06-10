@@ -216,7 +216,11 @@ class Consumer(KafkaConsumer):
                 )
             ]
 
-            chord(gwemopt_tasks)(gwemopt_post_task.s())
+            chord(gwemopt_tasks)(
+                gwemopt_post_task.s(
+                    owncloud_config=self.gcn_stream.gcn_config["OWNCLOUD"],
+                )
+            )
 
     def start_poll_loop(
         self, interval_between_polls: int = 1, max_retries: int = 120
