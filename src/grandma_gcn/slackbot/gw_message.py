@@ -346,8 +346,8 @@ def build_gwemopt_results_message(
         List of telescopes involved in the gwemopt task.
     execution_time : float
         The total execution time of the processing task in seconds.
-    path_gw_alert : str
-        The path to the alert folder on OwnCloud, used to link to the results.
+    path_gwemopt_results : str
+        The path to the gwemopt results folder on OwnCloud.
 
     Returns
     -------
@@ -386,10 +386,10 @@ def build_gwemopt_results_message(
     )
 
     # Public URL (meaning not the WebDAV url used to make the requests) for the OwnCloud event folder
-    url_owncloud_event = get_grandma_owncloud_public_url() + path_gw_alert
+    url_owncloud_gwemopt_results = get_grandma_owncloud_public_url() + path_gw_alert
     owncloud_repo_button = URLButton(
         "OwnCloud - {}".format(gw_alert.event_id),
-        str(url_owncloud_event),
+        str(url_owncloud_gwemopt_results),
         emoji=True,
     )
     msg.add_elements(
