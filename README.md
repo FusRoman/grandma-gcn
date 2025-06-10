@@ -100,7 +100,7 @@ An end-to-end test is provided in [`tests/test_e2e.py`](tests/test_e2e.py) to si
 
 ### Required TOML configuration
 
-To run the E2E test, you need a TOML configuration file (e.g., `gcn_stream_config.toml`) with the following required sections and secrets:
+To run the E2E test, you need a TOML configuration file (for example, `gcn_stream_config.toml`) with the following required sections and secrets.
 
 ```toml
 [CLIENT]
@@ -120,17 +120,18 @@ gcn_stream_log_path = "gcn_stream_e2e.log"
 notice_path = "notices"
 celery_task_log_path = "gwemopt_task"
 
-[Threshold]
-BBH_proba = 0.5
-Distance_cut = 5000
-Size_region_cut = 5000
+[THRESHOLD]
+BBH_proba = 0.5        # between 0 and 1
+Distance_cut = 5000    # in Mpc
+BNS_NSBH_size_cut = 5000 # in deg²
+BBH_size_cut = 5000 # in deg²
 
 [Slack]
 gw_alert_channel = "#your_slack_channel"
 gw_alert_channel_id = "your_slack_channel_id"
 
 [GWEMOPT]
-# You can now specify several independent GWEMOPT tasks by providing lists of lists.
+# You can specify several independent GWEMOPT tasks by providing lists of lists.
 # Each sublist corresponds to a separate GWEMOPT task (e.g., for different telescope groups or strategies).
 telescopes = [["TCH", "TRE"], ["TCA", "FZU-CTA-N"], ["FZU-Auger", "UBAI-T60S"], ["KAO", "Colibri"]]
 number_of_tiles = [[10, 10], [10, 15], [15, 10], [10, 10]]
@@ -152,9 +153,26 @@ base_url = "https://your-owncloud-instance/remote.php/dav/files/your_owncloud_us
 
 #### Notes on GWEMOPT configuration
 
-- The `[GWEMOPT]` section now supports launching multiple independent GWEMOPT tasks in parallel.
+- The `[GWEMOPT]` section supports launching multiple independent GWEMOPT tasks in parallel.
 - Each entry in `telescopes`, `number_of_tiles`, and `observation_strategy` must be a list of the same length, where each sublist or value defines the configuration for one GWEMOPT task.
 - For example, the first GWEMOPT task will use telescopes `["TCH", "TRE"]` with `[10, 10]` tiles and `"Tiling"` strategy, the second task will use `["TCA", "FZU-CTA-N"]` with `[10, 15]` tiles and `"Tiling"` strategy, etc.
+
+#### Notes on thresholds and GW_alert usage
+
+- The `[THRESHOLD]` section replaces the old `[Threshold]` and now uses explicit keys: `BBH_proba`, `Distance_cut`, `BNS_NSBH_size_cut`, `BBH_size_cut`.
+- When creating a `GW_alert` object, you should now pass the thresholds as a dictionary, for example:
+
+```python
+gw_alert = GW_alert(
+    notice_bytes,
+    thresholds={
+        "BBH_proba": 0.5,
+        "Distance_cut": 500,
+        "BNS_NSBH_size_cut": 100,
+        "BBH_size_cut": 100,
+    }
+)
+```
 
 ### Running the E2E test
 
