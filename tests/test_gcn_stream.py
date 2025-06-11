@@ -159,7 +159,7 @@ def test_gcn_stream_run(mocker, gcn_config_path, logger):
     gcn_stream.run(test=True)
 
     # Assertions
-    assert mock_poll_method.call_count == 121
+    assert mock_poll_method.call_count == 3601
     mock_commit_method.assert_called_once_with(mock_message)
     mock_process_alert.assert_called_once_with(notice=mock_message.value.return_value)
     assert len(message_queue) == 0
@@ -242,7 +242,7 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
         gcn_stream.run(test=True)
 
         # Assertions
-        assert mock_poll_method.call_count == 121
+        assert mock_poll_method.call_count == 3601
         mock_commit_method.assert_any_call(mock_message_update)
         mock_commit_method.assert_any_call(mock_message_retraction)
         mock_post_msg_on_slack.assert_called()  # Ensure post_msg_on_slack is called
