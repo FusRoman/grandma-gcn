@@ -6,9 +6,10 @@ services:
     image: busybox
     env_file:
       - .env
-    command: ["sh", "-c", "chown -R ${PROJECT_UID}:${PROJECT_GID} /shared-tmp"]
+    command: ["sh", "-c", "chown -R ${PROJECT_UID}:${PROJECT_GID} /shared-tmp /app/logs"]
     volumes:
       - e2e_volume:/shared-tmp
+      - ./logs:/app/logs
     restart: "no"
 
   gcn_stream:
