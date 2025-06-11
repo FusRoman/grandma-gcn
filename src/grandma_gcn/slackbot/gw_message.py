@@ -405,7 +405,7 @@ def post_msg_on_slack(
     webclient: WebClient,
     channel: str,
     msg: list[Message],
-    sleep_delay: int = 1,
+    thread_ts: str | None = None,
     logger: LoggerNewLine = None,
     verbose: bool = False,
 ) -> SlackResponse:
@@ -420,6 +420,8 @@ def post_msg_on_slack(
         the channel where will be posted the message
     msg : list
         list of message to post on slack, each string in the list will be a single post.
+    thread_ts : str, optional
+        if specified, the message will be posted in a thread, by default None
     sleep_delay : int, optional
         delay to wait between the message, by default 1
     logger : _type_, optional
@@ -439,7 +441,7 @@ def post_msg_on_slack(
         for tmp_msg in msg:
             json_p = json.dumps(tmp_msg.blocks["blocks"])
             slack_message_response = webclient.chat_postMessage(
-                channel=channel, text="error with msg blocks", blocks=json_p
+                channel=channel, text="msg blocks", blocks=json_p, thread_ts=thread_ts
             )
 
             if verbose:
@@ -457,6 +459,7 @@ def new_alert_on_slack(
     slack_client: WebClient,
     channel: str,
     logger: LoggerNewLine,
+    thread_ts: str | None = None,
     **kwargs: dict[str, Any],
 ) -> SlackResponse:
     """
@@ -479,6 +482,7 @@ def new_alert_on_slack(
         slack_client,
         channel,
         [msg],
+        thread_ts=thread_ts,
         logger=logger,
         verbose=False,
     )

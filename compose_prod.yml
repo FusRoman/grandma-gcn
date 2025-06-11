@@ -26,6 +26,7 @@ services:
         - PROJECT_GID=${PROJECT_GID}
     user: "${PROJECT_UID}:${PROJECT_GID}"
     volumes:
+      - logs:/app/logs
       - e2e_volume:/shared-tmp
     depends_on:
       - celery_worker
@@ -53,9 +54,10 @@ services:
       - e2e_volume:/shared-tmp
     command:
       [
-        "python -m",
+        "python", "-m",
         "celery",
-        "-A grandma_gcn.worker.celery_app",
+        "-A",
+        "grandma_gcn.worker.celery_app",
         "worker",
         "--loglevel=DEBUG",
       ]
