@@ -7,7 +7,7 @@ from tests.conftest import open_notice_file
 import time
 
 
-def push_message_for_test(mocker, message_queue, topic, notice_file):
+def push_message_for_test(mocker, message_queue: list, topic: str, notice_file: str):
     """
     Helper function to push a message to the mocked Kafka consumer for testing.
     """
@@ -18,6 +18,8 @@ def push_message_for_test(mocker, message_queue, topic, notice_file):
     mock_message.value.return_value = open_notice_file(Path("tests"), notice_file)
 
     message_queue.append(mock_message)
+
+    return mock_message
 
 
 @mark.e2e
