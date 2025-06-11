@@ -137,7 +137,6 @@ class Consumer(KafkaConsumer):
         Exception
             Any exception during processing is logged and re-raised.
         """
-        self.logger.info("Processing alert")
 
         gw_alert = GW_alert(
             notice,
@@ -230,10 +229,6 @@ class Consumer(KafkaConsumer):
         for _ in range(max_retries):
             message = self.poll(timeout=interval_between_polls)
             if message is not None:
-
-                self.logger.info("-- A new notice has arrived --")
-                self.logger.info(f"topic: {message.topic()}")
-                self.logger.info(f"current offset: {message.offset()}")
                 if message.error():
                     self.logger.error(message.error())
                     continue

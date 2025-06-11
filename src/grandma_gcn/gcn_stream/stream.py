@@ -54,7 +54,8 @@ class GCNStream:
 
         self.logger.info("Starting GCN stream consumer")
         while True:
-            gcn_consumer.start_poll_loop()
+            self.logger.info("GCN stream consumer is active, waiting for messages...")
+            gcn_consumer.start_poll_loop(max_retries=3600)
             if test:
                 break
 
