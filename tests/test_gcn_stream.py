@@ -10,7 +10,8 @@ from yarl import URL
 
 from grandma_gcn.gcn_stream.consumer import Consumer
 from grandma_gcn.gcn_stream.gcn_logging import init_logging
-from tests.conftest import open_notice_file
+
+from tests.test_e2e import push_message_for_test
 
 
 def test_init_gcn_stream(gcn_config_path, logger):
@@ -173,17 +174,13 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
     # Simulate a message queue
     message_queue = []
 
-    # Create a mocked message
-    mock_message = mocker.Mock()
-    mock_message.topic.return_value = "igwn.gwalert"
-    mock_message.offset.return_value = 42
-    mock_message.error.return_value = None
-    mock_message.value.return_value = open_notice_file(
-        Path("tests"), "S241102br-update.json"
+    mock_message_update = push_message_for_test(
+        mocker, message_queue, "igwn.gwalert", "S241102br-update.json"
     )
 
-    # Add the mocked message to the queue
-    message_queue.append(mock_message)
+    mock_message_retraction = push_message_for_test(
+        mocker, message_queue, "igwn.gwalert", "retraction.json"
+    )
 
     # Mock the poll method
     def mock_poll(*args, **kwargs):
@@ -246,7 +243,8 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
 
         # Assertions
         assert mock_poll_method.call_count == 121
-        mock_commit_method.assert_called_once_with(mock_message)
+        mock_commit_method.assert_any_call(mock_message_update)
+        mock_commit_method.assert_any_call(mock_message_retraction)
         mock_post_msg_on_slack.assert_called()  # Ensure post_msg_on_slack is called
         mock_gwemopt_task.s.assert_called()  # Ensure gwemopt_task.s is called
         mock_gwemopt_post_task.s.assert_called()  # Ensure gwemopt_post_task.s is called

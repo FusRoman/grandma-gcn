@@ -451,8 +451,6 @@ class GW_alert:
         msg = ""
         conclusion = self.GRANDMA_Action.NO_GRANDMA
 
-        _, size_region, mean_dist, _ = self.get_error_region(0.9)
-
         if not self.is_real_observation():
             return score, msg, conclusion
 
@@ -464,6 +462,7 @@ class GW_alert:
                 | self.EventType.INITIAL
                 | self.EventType.UPDATE
             ):
+                _, size_region, mean_dist, _ = self.get_error_region(0.9)
                 match self.event_class:
                     case self.CBC_proba.Terrestrial:
                         msg = (
