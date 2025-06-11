@@ -29,6 +29,7 @@ services:
     volumes:
       - ./logs:/app/logs
       - e2e_volume:/shared-tmp
+      - ./catalogs:/home/${USR}/code/catalogs
     depends_on:
       - celery_worker
       - init_volume
@@ -52,7 +53,9 @@ services:
     depends_on:
       - redis
     volumes:
+      - ./logs:/app/logs
       - e2e_volume:/shared-tmp
+      - ./catalogs:/home/${USR}/code/catalogs
     command:
       [
         "python", "-m",
