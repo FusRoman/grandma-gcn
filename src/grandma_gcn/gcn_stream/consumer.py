@@ -158,7 +158,7 @@ class Consumer(KafkaConsumer):
             self.logger.info(f"Folder created on ownCloud, url: {owncloud_alert_url}")
 
             # send a message to Slack with the alert information
-            new_alert_on_slack(
+            new_alert_response = new_alert_on_slack(
                 gw_alert,
                 build_gwalert_msg,
                 self.gcn_stream.slack_client,
@@ -187,7 +187,6 @@ class Consumer(KafkaConsumer):
                     self.gw_channel_id,
                     self.gcn_stream.gcn_config["OWNCLOUD"],
                     str(owncloud_alert_url),
-                    path_gw_alert,
                     str(path_notice),
                     "_".join(
                         [
@@ -200,6 +199,7 @@ class Consumer(KafkaConsumer):
                     self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
                     gw_alert.thresholds,
                     obs_strat,
+                    new_alert_response["ts"],
                     self.gcn_stream.gcn_config["GWEMOPT"]["path_galaxy_catalog"],
                     self.gcn_stream.gcn_config["GWEMOPT"]["galaxy_catalog"],
                 )

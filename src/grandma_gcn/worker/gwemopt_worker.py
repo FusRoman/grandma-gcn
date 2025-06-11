@@ -223,12 +223,12 @@ def gwemopt_task(
     channel_id: str,
     owncloud_config: dict[str, Any],
     owncloud_gwemopt_url: str,
-    path_gw_alert: str,
     path_notice: str,
     path_output: str,
     path_log: str,
     threshold_config: dict[str, float | int],
     obs_strategy: str,
+    alert_thread_ts: str | None = None,
     path_galaxy_catalog: str | None = None,
     galaxy_catalog: str | None = None,
 ) -> None:
@@ -252,8 +252,6 @@ def gwemopt_task(
         Configuration dictionary for the ownCloud client, containing the username and password.
     owncloud_gwemopt_url : str
         The URL for the ownCloud instance where the results will be stored.
-    path_gw_alert : str
-        Path to the gw alert folder on OWNCLOUD.
     path_notice : str
         Path to the GCN notice file.
     path_output : str
@@ -264,6 +262,8 @@ def gwemopt_task(
         Configuration dictionary for the thresholds to use in the gwemopt task.
     obs_strategy : str
         The observation strategy to use, as a string. It should be one of the values in `GW_alert.ObservationStrategy`.
+    alert_thread_ts : str | None
+        The thread timestamp for the alert message on Slack, if applicable.
     path_galaxy_catalog : str
         Path to the galaxy catalog directory.
     galaxy_catalog : str
@@ -328,6 +328,7 @@ def gwemopt_task(
                     worker_slack_client,
                     channel=slack_channel,
                     logger=logger,
+                    thread_ts=alert_thread_ts,
                     obs_strategy=obs_strategy,
                     celery_task_id=task_id,
                     task_start_time=start_task,
@@ -397,6 +398,7 @@ def gwemopt_task(
                     worker_slack_client,
                     channel=slack_channel,
                     logger=logger,
+                    thread_ts=alert_thread_ts,
                     tiles_plan=tiles,
                     celery_task_id=task_id,
                     execution_time=(Time.now() - start_task).sec,

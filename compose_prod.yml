@@ -26,7 +26,7 @@ services:
         - PROJECT_GID=${PROJECT_GID}
     user: "${PROJECT_UID}:${PROJECT_GID}"
     volumes:
-      - ../logs:/app/logs
+      - logs:/app/logs
       - e2e_volume:/shared-tmp
     depends_on:
       - celery_worker
