@@ -239,10 +239,10 @@ GCN Kafka Stream
       ▼
 Alert Ingestion & Parsing
       │
-      ├───────────────► Slack Notification (alert received)
-      │
       ▼
 Significance Filtering ──► (discard if not significant)
+      │
+      ├───────────────► Slack Notification (alert received & significant)
       │
       ▼
 Save Notice & Log
