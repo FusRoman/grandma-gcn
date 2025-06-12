@@ -239,6 +239,8 @@ GCN Kafka Stream
       ▼
 Alert Ingestion & Parsing
       │
+      ├───────────────► Slack Notification (alert received)
+      │
       ▼
 Significance Filtering ──► (discard if not significant)
       │
@@ -247,14 +249,18 @@ Save Notice & Log
       │
       ├───────────────► OwnCloud Folder Creation
       │
+      ├───────────────► Slack Notification (inform GWEMOPT starting)
+      │
       ▼
 Trigger GWEMOPT (Celery)
       │
       ▼
 Upload Results to OwnCloud
       │
+      ├───────────────► Slack Notification (GWEMOPT results ready)
+      │
       ▼
-Slack Notification
+End of Pipeline
 ```
 
 This pipeline ensures that GW alerts are processed rapidly, observation strategies are generated and distributed, and all relevant stakeholders are notified in real time.
