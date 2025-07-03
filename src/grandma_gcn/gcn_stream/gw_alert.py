@@ -418,8 +418,8 @@ class GW_alert:
         )
 
     class GRANDMA_Action(Enum):
-        GO_GRANDMA = "🚀 *GO GRANDMA*"
-        NO_GRANDMA = "❌ *NO GRANDMA*"
+        GO_GRANDMA = "🚀 *Should we GO GRANDMA ?*"
+        NO_GRANDMA = "❌ *PROBABLY NO GRANDMA ?*"
 
     def gw_score(self) -> tuple[int, str, GRANDMA_Action]:
         """

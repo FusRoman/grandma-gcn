@@ -110,7 +110,7 @@ def build_gwalert_msg(gw_alert: GW_alert, path_gw_alert: str) -> Message:
 
     gw_alert.logger.info("Building message for GW alert")
 
-    score, msg_fa, action = gw_alert.gw_score()
+    score, _, action = gw_alert.gw_score()
 
     msg = Message()
 
@@ -168,8 +168,7 @@ def build_gwalert_msg(gw_alert: GW_alert, path_gw_alert: str) -> Message:
         .add_elements(
             MarkdownText("*GRANDMA Score:* {}".format(score)),
         )
-        .add_elements(MarkdownText("*Message for FA:* \n{}".format(msg_fa)))
-        .add_elements(MarkdownText("*Action to take:* {}".format(action.value))),
+        .add_elements(MarkdownText("*Decision time:* {}".format(action.value))),
     )
 
     msg.add_elements(
