@@ -10,7 +10,11 @@ from astropy.table import Table
 
 @pytest.fixture(autouse=True)
 def set_fake_slack_token(monkeypatch, request):
-    if "e2e" in request.keywords:
+    """
+    Fixture to set a fake Slack token for tests that do not require real Slack interaction.
+    This fixture is automatically applied to all tests unless the test is marked with "e2e" or "e2e_light".
+    """
+    if "e2e" in request.keywords or "e2e_light" in request.keywords:
         yield
     else:
         monkeypatch.setenv("FINK_SLACK_TOKEN", "fake-token-for-tests")
@@ -110,4 +114,11 @@ def owncloud_client(gcn_config_path, logger):
 
 @pytest.fixture
 def tiles() -> dict[str, Table]:
-    return pickle.load(open("tests/data/tiles.pickle", "rb"))
+    # tiles contains the following telescopes: ['TCH', 'TRE', 'TCA', 'FZU-CTA-N', 'FZU-Auger']
+    tiles = pickle.load(open("tests/data/tiles.pickle", "rb"))
+
+    tiles["KAO"] = tiles["Colibri"] = tiles["UBAI-T60S"] = tiles["TRT-SBO"] = tiles[
+        "TRT-SRO"
+    ] = tiles["NOWT"] = tiles["OPD-1.6"] = tiles["Abastunami-T70"] = None
+
+    return tiles

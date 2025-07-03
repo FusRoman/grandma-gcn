@@ -6,7 +6,11 @@ from yarl import URL
 
 from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
-from grandma_gcn.slackbot.gw_message import build_gwalert_msg, new_alert_on_slack
+from grandma_gcn.slackbot.gw_message import (
+    build_gwalert_msg,
+    build_gwalert_notification_msg,
+    new_alert_on_slack,
+)
 from grandma_gcn.worker.gwemopt_worker import gwemopt_post_task, gwemopt_task
 from grandma_gcn.worker.owncloud_client import OwncloudClient
 
@@ -142,78 +146,30 @@ class Consumer(KafkaConsumer):
             notice,
             self.gcn_stream.gcn_config["THRESHOLD"],
         )
-        score, _, _ = gw_alert.gw_score()
-        if score > 1:
-            self.logger.info("Significant alert detected")
 
-            # save the notice on disk to transfer it to the celery worker
-            path_notice = gw_alert.save_notice(self.gcn_stream.notice_path)
-
-            self.logger.info(f"Notice saved at {path_notice}")
-
-            # Initialize ownCloud folders for this alert
-            path_gw_alert, owncloud_alert_url = self.init_owncloud_folders(gw_alert)
-
-            self.logger.info(f"Folder created on ownCloud, url: {owncloud_alert_url}")
-
-            # send a message to Slack with the alert information
-            new_alert_response = new_alert_on_slack(
+        if gw_alert.is_significant:
+            _ = new_alert_on_slack(
                 gw_alert,
-                build_gwalert_msg,
+                build_gwalert_notification_msg,
                 self.gcn_stream.slack_client,
                 channel=self.gw_alert_channel,
                 logger=self.logger,
-                path_gw_alert=path_gw_alert,
             )
+            score, _, _ = gw_alert.gw_score()
+            if score > 1:
+                self.automatic_gwemopt_process(gw_alert)
 
-            self.logger.info("Send gw alert to slack")
-
-            self.logger.info("Sending gwemopt task to celery worker")
-
-            telescopes_list = self.gcn_stream.gcn_config["GWEMOPT"]["telescopes"]
-            number_of_tiles = self.gcn_stream.gcn_config["GWEMOPT"]["number_of_tiles"]
-            observation_strategy = self.gcn_stream.gcn_config["GWEMOPT"][
-                "observation_strategy"
-            ]
-
-            # construct a list of tasks for each sublist of telescopes, number of tiles and observation strategy
-            gwemopt_tasks = [
-                gwemopt_task.s(
-                    tel_list,
-                    nb_tiles_list,
-                    self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
-                    self.gw_alert_channel,
-                    self.gw_channel_id,
-                    self.gcn_stream.gcn_config["OWNCLOUD"],
-                    str(owncloud_alert_url),
-                    str(path_notice),
-                    "_".join(
-                        [
-                            gw_alert.event_id,
-                            obs_strat,
-                            "_".join(tel_list),
-                            uuid.uuid4().hex,
-                        ]
-                    ),
-                    self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
-                    gw_alert.thresholds,
-                    obs_strat,
-                    new_alert_response["ts"],
-                    self.gcn_stream.gcn_config["GWEMOPT"]["path_galaxy_catalog"],
-                    self.gcn_stream.gcn_config["GWEMOPT"]["galaxy_catalog"],
+            else:
+                self.logger.info(
+                    f"Alert {gw_alert.event_id} is below the automatic gwemopt score, score: {score}, skipping processing."
                 )
-                for tel_list, nb_tiles_list, obs_strat in zip(
-                    telescopes_list,
-                    number_of_tiles,
-                    observation_strategy,
-                )
-            ]
+                return
 
-            chord(gwemopt_tasks)(
-                gwemopt_post_task.s(
-                    owncloud_config=self.gcn_stream.gcn_config["OWNCLOUD"],
-                )
+        else:
+            self.logger.info(
+                f"Alert {gw_alert.event_id} is not significant, skipping processing."
             )
+            return
 
     def start_poll_loop(
         self, interval_between_polls: int = 1, max_retries: int = 120
@@ -238,3 +194,75 @@ class Consumer(KafkaConsumer):
                 except Exception as err:
                     self.logger.error(err)
                     raise err
+
+    def automatic_gwemopt_process(self, gw_alert: GW_alert) -> None:
+        self.logger.info("Significant alert detected")
+
+        # save the notice on disk to transfer it to the celery worker
+        path_notice = gw_alert.save_notice(self.gcn_stream.notice_path)
+
+        self.logger.info(f"Notice saved at {path_notice}")
+
+        # Initialize ownCloud folders for this alert
+        path_gw_alert, owncloud_alert_url = self.init_owncloud_folders(gw_alert)
+
+        self.logger.info(f"Folder created on ownCloud, url: {owncloud_alert_url}")
+
+        # send a message to Slack with the alert information
+        new_alert_response = new_alert_on_slack(
+            gw_alert,
+            build_gwalert_msg,
+            self.gcn_stream.slack_client,
+            channel=self.gw_alert_channel,
+            logger=self.logger,
+            path_gw_alert=path_gw_alert,
+        )
+
+        self.logger.info("Send gw alert to slack")
+
+        self.logger.info("Sending gwemopt task to celery worker")
+
+        telescopes_list = self.gcn_stream.gcn_config["GWEMOPT"]["telescopes"]
+        number_of_tiles = self.gcn_stream.gcn_config["GWEMOPT"]["number_of_tiles"]
+        observation_strategy = self.gcn_stream.gcn_config["GWEMOPT"][
+            "observation_strategy"
+        ]
+
+        # construct a list of tasks for each sublist of telescopes, number of tiles and observation strategy
+        gwemopt_tasks = [
+            gwemopt_task.s(
+                tel_list,
+                nb_tiles_list,
+                self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
+                self.gw_alert_channel,
+                self.gw_channel_id,
+                self.gcn_stream.gcn_config["OWNCLOUD"],
+                str(owncloud_alert_url),
+                str(path_notice),
+                "_".join(
+                    [
+                        gw_alert.event_id,
+                        obs_strat,
+                        "_".join(tel_list),
+                        uuid.uuid4().hex,
+                    ]
+                ),
+                self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
+                gw_alert.thresholds,
+                obs_strat,
+                new_alert_response["ts"],
+                self.gcn_stream.gcn_config["GWEMOPT"]["path_galaxy_catalog"],
+                self.gcn_stream.gcn_config["GWEMOPT"]["galaxy_catalog"],
+            )
+            for tel_list, nb_tiles_list, obs_strat in zip(
+                telescopes_list,
+                number_of_tiles,
+                observation_strategy,
+            )
+        ]
+
+        chord(gwemopt_tasks)(
+            gwemopt_post_task.s(
+                owncloud_config=self.gcn_stream.gcn_config["OWNCLOUD"],
+            )
+        )

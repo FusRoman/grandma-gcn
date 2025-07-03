@@ -685,8 +685,6 @@ class GW_alert:
         unique_tiles = unique(tiles_table, keys="tile_id", keep="first")
         prob_covered = sum(unique_tiles["prob_sum"])
 
-        print("Total probability density in skymap:", sum(prob))
-
         integrated_proba_percentage = ((prob_covered / sum(prob)) * 100).value
 
         return integrated_proba_percentage

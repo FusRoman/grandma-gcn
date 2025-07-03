@@ -63,8 +63,9 @@ max-complexity = 10
 
 [tool.pytest.ini_options]
 markers = [
-    "e2e: run tests that need the app_test and the db_test (deselect with '-m \"not e2e\"')",
+    "e2e: run full processing from the slack message to the plan generation(deselect with '-m \"not e2e\"')",
+    "e2e_light: run a lighter version that test only the GCN stream and the Slack message posting (deselect with '-m \"not e2e_light\"')",
 ]
 
 [tool.pdm.scripts]
-test = 'pytest -m "not e2e" --cov=grandma_gcn --cov-report=xml'
+test = 'pytest -m "not e2e and not e2e_light" --cov=grandma_gcn --cov-report=xml'
