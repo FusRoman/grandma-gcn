@@ -13,6 +13,7 @@ from grandma_gcn.slackbot.element_extension import (
     RichTextElement,
     URLButton,
     Action,
+    PlainText,
 )
 
 from fink_utils.slack_bot.rich_text.rich_text_element import RichTextStyle
@@ -59,6 +60,37 @@ def instruments_to_markdown(instruments: list[GW_alert.Instrument]) -> str:
         return "No instruments available."
 
     return "\n".join(f"- {instrument.value}" for instrument in instruments)
+
+
+def build_gwalert_notification_msg(gw_alert: GW_alert) -> Message:
+    """
+    Build a minimal Slack message to notify of a new GW alert with unknown significance.
+
+    Parameters
+    ----------
+    gw_alert : GW_alert
+        The GW alert object.
+
+    Returns
+    -------
+    Message
+        A minimal notification message.
+    """
+    msg = Message()
+    msg.add_header("🔔 New GW alert received: {}".format(gw_alert.event_id))
+    msg.add_divider()
+    msg.add_elements(
+        BaseSection().add_text(
+            # The \u00a0 is a non-breaking space, used to indent the text
+            PlainText(
+                "\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0⏳ Pending validation by the shifter team…",
+                emoji=True,
+            )
+        )
+    )
+
+    print(msg.blocks)
+    return msg
 
 
 def build_gwalert_msg(gw_alert: GW_alert, path_gw_alert: str) -> Message:
@@ -468,12 +500,43 @@ def new_alert_on_slack(
     ----------
     gw_alert : GW_alert
         the alert to send
+    build_msg_function : Callable[[GW_alert], Message]
+        a function that takes a GW_alert object and returns a Message object
     slack_client : WebClient
         the slack client to use to send the message
     channel : str
         the channel to send the message to
     logger : LoggerNewLine
         the logger to use
+    thread_ts : str | None, optional
+        if specified, the message will be posted in a thread, by default None
+    **kwargs : dict[str, Any]
+        additional keyword arguments to pass to the build_msg_function, such as:
+        - celery_task_id: int
+            The ID of the Celery task that processed the alert.
+        - execution_time: float
+            The total execution time of the processing task in seconds.
+        - obs_strategy: GW_alert.ObservationStrategy
+            The observation strategy used for the processing.
+        - telescopes: list[str]
+            List of telescopes involved in the gwemopt task.
+        - tiles_plan: dict[str, Table | None]
+            A dictionary mapping telescope names to their respective tiles plan.
+        - path_gw_alert: str
+            The path to the gwemopt results folder on OwnCloud.
+
+    Returns
+    -------
+    SlackResponse
+        The response from the Slack API after posting the message.
+
+    Notes
+    -----
+    This function builds a message using the provided `build_msg_function` and sends it to the
+    specified Slack channel using the provided `slack_client`. The message can be posted in a
+    thread if `thread_ts` is provided. Additional keyword arguments can be passed to the
+    `build_msg_function` to customize the message content, such as task ID, execution time,
+    observation strategy, telescopes, tiles plan, and path to the GW alert folder on OwnCloud.
     """
 
     msg = build_msg_function(gw_alert, **kwargs)
