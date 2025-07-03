@@ -153,14 +153,14 @@ def build_gwalert_msg(gw_alert: GW_alert, path_gw_alert: str) -> Message:
         )
         .add_elements(
             MarkdownText(
-                "*Credible region size:*\n- 90% = {:.2f} deg²\n- 50% = {:.2f} deg²".format(
+                "*Credible region size:*\n- 90% = {:.0f} deg²\n- 50% = {:.0f} deg²".format(
                     region_size_90, region_size_50
                 )
             ),
         )
         .add_elements(
             MarkdownText(
-                "*Mean luminosity distance:*\n{:.2f} ± {:.2f} Mpc".format(
+                "*Mean luminosity distance:*\n{:.0f} ± {:.0f} Mpc".format(
                     mean_distance, mean_sigma
                 )
             ),
@@ -409,7 +409,7 @@ def build_gwemopt_results_message(
             MarkdownText(
                 "*Telescopes: (coverage percentage)*\n{}".format(
                     "\n".join(
-                        f"- {tel} ({gw_alert.integrated_surface_percentage(tiles_plan[tel]):.2f} %)"
+                        f"- {tel} ({gw_alert.integrated_surface_percentage(tiles_plan[tel]):.0f} %)"
                         for tel in telescopes
                     )
                 )
