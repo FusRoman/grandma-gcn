@@ -324,7 +324,7 @@ def test_process_alert_calls(mocker, tiles: dict[str, Table]):
                                 )
 
         assert mock_obs_plan.call_count == 4
-        assert mock_post_msg_on_slack.call_count == 10
+        assert mock_post_msg_on_slack.call_count == 9
         assert mock_open.call_count == 4
         assert mock_upload.call_count == 4
         assert "tiles_coverage_int.png" in str(mock_open.call_args_list[0][0])

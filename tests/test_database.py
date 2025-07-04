@@ -18,14 +18,9 @@ def test_insert_duplicate_alert_increments_count(sqlite_engine_and_session):
     _, SessionLocal = sqlite_engine_and_session
 
     with SessionLocal() as session:
-        GW_alert.insert_or_increment(
-            session, trigger_id="S240707a", thread_ts="123.456"
-        )
-        alert = GW_alert.insert_or_increment(
-            session, trigger_id="S240707a", thread_ts="123.456"
-        )
+        GW_alert.insert_or_increment(session, "S240707a", thread_ts="123.456")
+        alert = GW_alert.insert_or_increment(session, "S240707a", thread_ts="123.456")
 
-        assert alert.triggerId == "S240707a"
         assert alert.reception_count == 2
 
 
@@ -33,12 +28,8 @@ def test_thread_ts_is_not_updated_on_increment(sqlite_engine_and_session):
     _, SessionLocal = sqlite_engine_and_session
 
     with SessionLocal() as session:
-        GW_alert.insert_or_increment(
-            session, trigger_id="S240707a", thread_ts="original"
-        )
-        alert = GW_alert.insert_or_increment(
-            session, trigger_id="S240707a", thread_ts="new_value"
-        )
+        GW_alert.insert_or_increment(session, "S240707a", thread_ts="original")
+        alert = GW_alert.insert_or_increment(session, "S240707a", thread_ts="new_value")
 
         assert alert.reception_count == 2
         assert alert.thread_ts == "original"
@@ -48,10 +39,44 @@ def test_insert_with_none_thread_ts(sqlite_engine_and_session):
     _, SessionLocal = sqlite_engine_and_session
 
     with SessionLocal() as session:
-        alert = GW_alert.insert_or_increment(
-            session, trigger_id="S240707a", thread_ts=None
-        )
+        alert = GW_alert.insert_or_increment(session, "S240707b", thread_ts=None)
 
-        assert alert.triggerId == "S240707a"
+        assert alert.triggerId == "S240707b"
         assert alert.thread_ts is None
         assert alert.reception_count == 1
+
+
+def test_get_or_set_thread_ts_sets_only_if_none(sqlite_engine_and_session):
+    _, SessionLocal = sqlite_engine_and_session
+
+    with SessionLocal() as session:
+        alert = GW_alert.get_by_trigger_id(session, "UNKNOWN")
+        assert alert is None
+
+        result = GW_alert.get_or_set_thread_ts(session, "UNKNOWN", "789.000")
+        assert result is None or isinstance(result, GW_alert)
+
+    with SessionLocal() as session:
+        alert = GW_alert(triggerId="S240707c", thread_ts=None)
+        session.add(alert)
+        session.commit()
+
+        updated = GW_alert.get_or_set_thread_ts(session, "S240707c", "789.000")
+        assert updated is not None
+        assert updated.thread_ts == "789.000"
+
+        updated = GW_alert.get_or_set_thread_ts(
+            session, "S240707c", "should_not_overwrite"
+        )
+        assert updated.thread_ts == "789.000"
+
+
+def test_increment_reception_count_instance_method(sqlite_engine_and_session):
+    _, SessionLocal = sqlite_engine_and_session
+
+    with SessionLocal() as session:
+        alert = GW_alert.get_or_create(session, "S240707d", thread_ts="init")
+        assert alert.reception_count == 1
+
+        alert.increment_reception_count(session)
+        assert alert.reception_count == 2

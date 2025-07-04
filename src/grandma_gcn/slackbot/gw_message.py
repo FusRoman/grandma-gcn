@@ -89,11 +89,10 @@ def build_gwalert_notification_msg(gw_alert: GW_alert) -> Message:
         )
     )
 
-    print(msg.blocks)
     return msg
 
 
-def build_gwalert_msg(gw_alert: GW_alert, path_gw_alert: str) -> Message:
+def build_gwalert_data_msg(gw_alert: GW_alert, path_gw_alert: str) -> Message:
     """
     Build a message for the GW alert.
     Parameters

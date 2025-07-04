@@ -6,8 +6,9 @@ from yarl import URL
 
 from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
+from grandma_gcn.database.gw_db import GW_alert as GW_alert_DB
 from grandma_gcn.slackbot.gw_message import (
-    build_gwalert_msg,
+    build_gwalert_data_msg,
     build_gwalert_notification_msg,
     new_alert_on_slack,
 )
@@ -148,16 +149,20 @@ class Consumer(KafkaConsumer):
         )
 
         if gw_alert.is_significant:
-            _ = new_alert_on_slack(
-                gw_alert,
-                build_gwalert_notification_msg,
-                self.gcn_stream.slack_client,
-                channel=self.gw_alert_channel,
-                logger=self.logger,
-            )
+            self.logger.info("Significant alert detected")
+            # Initialize the workflow for the significant alert
+            # This includes sending the initial alert to Slack, creating the ownCloud folder, and saving the
+            # alert in the database
+            # If the alert already exists in the database, it will increment the reception count and set
+            # the thread timestamp if it is not already set.
+            owncloud_alert_url, gw_thread_ts = self._handle_significant_alert(gw_alert)
+
             score, _, _ = gw_alert.gw_score()
             if score > 1:
-                self.automatic_gwemopt_process(gw_alert)
+                # Process the significant alert with the automatic gwemopt process
+                self.automatic_gwemopt_process(
+                    gw_alert, owncloud_alert_url, gw_thread_ts
+                )
 
             else:
                 self.logger.info(
@@ -171,54 +176,104 @@ class Consumer(KafkaConsumer):
             )
             return
 
-    def start_poll_loop(
-        self, interval_between_polls: int = 1, max_retries: int = 120
-    ) -> None:
+    def _handle_significant_alert(self, gw_alert) -> tuple[str, str]:
         """
-        Poll for messages from the Kafka stream with a timeout. The maximum duration of the polling is defined by the
-        interval_between_polls multiplied by the max_retries.
+        Handles the starting of the workflow for a significant alert (slack, owncloud, DB).
+        This method performs the following steps:
+        1. Checks if the alert already exists in the database.
+        2. If it does not exist, creates a new entry in the database and sets the thread timestamp.
+        3. If it exists, increments the reception count.
 
-        Args:
-            interval_between_polls (int, optional): Interval between polling attempts. Defaults to 1.
-            max_retries (int, optional): Maximum number of polling attempts. Defaults to 120.
+        Returns
+        -------
+        Tuple[owncloud_url, slack_thread_ts]
         """
-        for _ in range(max_retries):
-            message = self.poll(timeout=interval_between_polls)
-            if message is not None:
-                if message.error():
-                    self.logger.error(message.error())
-                    continue
-                try:
-                    self.process_alert(notice=message.value())
-                    self.commit(message)
-                except Exception as err:
-                    self.logger.error(err)
-                    raise err
+        gw_alert_db = GW_alert_DB.get_or_create(
+            self.gcn_stream.session_local, trigger_id=gw_alert.event_id
+        )
 
-    def automatic_gwemopt_process(self, gw_alert: GW_alert) -> None:
-        self.logger.info("Significant alert detected")
+        self.logger.info(
+            f"Alert {gw_alert.event_id} with triggerId {gw_alert_db.triggerId} "
+            f"and reception count {gw_alert_db.reception_count}"
+        )
 
-        # save the notice on disk to transfer it to the celery worker
-        path_notice = gw_alert.save_notice(self.gcn_stream.notice_path)
+        if gw_alert_db.thread_ts is None:
+            notif_alert_response = new_alert_on_slack(
+                gw_alert,
+                build_gwalert_notification_msg,
+                self.gcn_stream.slack_client,
+                channel=self.gw_alert_channel,
+                logger=self.logger,
+            )
 
-        self.logger.info(f"Notice saved at {path_notice}")
+            gw_alert_db.set_thread_ts(
+                notif_alert_response["ts"], self.gcn_stream.session_local
+            )
+
+            self.logger.info(
+                f"Thread timestamp set for alert {gw_alert.event_id}: {notif_alert_response['ts']}"
+            )
+
+        else:
+            gw_alert_db.increment_reception_count(self.gcn_stream.session_local)
+
+        gw_thread_ts = gw_alert_db.thread_ts
 
         # Initialize ownCloud folders for this alert
         path_gw_alert, owncloud_alert_url = self.init_owncloud_folders(gw_alert)
 
         self.logger.info(f"Folder created on ownCloud, url: {owncloud_alert_url}")
 
-        # send a message to Slack with the alert information
-        new_alert_response = new_alert_on_slack(
+        # Send main alert info to Slack (in thread)
+        _ = new_alert_on_slack(
             gw_alert,
-            build_gwalert_msg,
+            build_gwalert_data_msg,
             self.gcn_stream.slack_client,
             channel=self.gw_alert_channel,
             logger=self.logger,
+            thread_ts=gw_thread_ts,
             path_gw_alert=path_gw_alert,
         )
 
         self.logger.info("Send gw alert to slack")
+
+        return owncloud_alert_url, gw_thread_ts
+
+    def automatic_gwemopt_process(
+        self, gw_alert: GW_alert, owncloud_alert_url: URL, gw_thread_ts: str
+    ) -> None:
+        """
+        Process a significant GW alert by generating an observation plan using the GWEMOPT task.
+        This method performs the following steps:
+        1. Logs the processing of the significant alert.
+        2. Saves the alert notice to disk for transfer to the Celery worker.
+        3. Initializes the ownCloud folders for the alert.
+        4. Constructs a list of Celery tasks for each GWEMOPT configuration (telescopes, number of tiles, observation strategy).
+        5. Sends the tasks to the Celery worker using a chord, which will execute the tasks in parallel and trigger a post-processing task upon
+        completion.
+
+        Parameters
+        ----------
+        gw_alert : GW_alert
+            The significant GW alert object containing event information and thresholds.
+        owncloud_alert_url : URL
+            The URL of the alert folder on ownCloud where the notice will be saved.
+        gw_thread_ts : str
+            The thread timestamp for the alert on Slack, used to link the alert messages.
+
+        Raises
+        ------
+        Exception
+            Any exception during the processing is logged and re-raised.
+        """
+        self.logger.info(
+            f"Processing significant alert {gw_alert.event_id} with score > 1, Observation plan will be generated."
+        )
+
+        # save the notice on disk to transfer it to the celery worker
+        path_notice = gw_alert.save_notice(self.gcn_stream.notice_path)
+
+        self.logger.info(f"Notice saved at {path_notice}")
 
         self.logger.info("Sending gwemopt task to celery worker")
 
@@ -250,7 +305,7 @@ class Consumer(KafkaConsumer):
                 self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
                 gw_alert.thresholds,
                 obs_strat,
-                new_alert_response["ts"],
+                gw_thread_ts,
                 self.gcn_stream.gcn_config["GWEMOPT"]["path_galaxy_catalog"],
                 self.gcn_stream.gcn_config["GWEMOPT"]["galaxy_catalog"],
             )
@@ -266,3 +321,27 @@ class Consumer(KafkaConsumer):
                 owncloud_config=self.gcn_stream.gcn_config["OWNCLOUD"],
             )
         )
+
+    def start_poll_loop(
+        self, interval_between_polls: int = 1, max_retries: int = 120
+    ) -> None:
+        """
+        Poll for messages from the Kafka stream with a timeout. The maximum duration of the polling is defined by the
+        interval_between_polls multiplied by the max_retries.
+
+        Args:
+            interval_between_polls (int, optional): Interval between polling attempts. Defaults to 1.
+            max_retries (int, optional): Maximum number of polling attempts. Defaults to 120.
+        """
+        for _ in range(max_retries):
+            message = self.poll(timeout=interval_between_polls)
+            if message is not None:
+                if message.error():
+                    self.logger.error(message.error())
+                    continue
+                try:
+                    self.process_alert(notice=message.value())
+                    self.commit(message)
+                except Exception as err:
+                    self.logger.error(err)
+                    raise err
