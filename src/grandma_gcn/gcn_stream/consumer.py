@@ -233,6 +233,7 @@ class Consumer(KafkaConsumer):
             logger=self.logger,
             thread_ts=gw_thread_ts,
             path_gw_alert=path_gw_alert,
+            nb_alert_received=gw_alert_db.reception_count,
         )
 
         self.logger.info("Send gw alert to slack")

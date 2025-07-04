@@ -76,6 +76,13 @@ def build_gwalert_notification_msg(gw_alert: GW_alert) -> Message:
     Message
         A minimal notification message.
     """
+
+    indent = "\u00a0" * 8
+    message_content = (
+        f"{indent}⏳ Pending validation by the shifter team…\n"
+        f"{indent*2}Check thread messages for more details !"
+    )
+
     msg = Message()
     msg.add_header("🔔 New GW alert received: {}".format(gw_alert.event_id))
     msg.add_divider()
@@ -83,7 +90,7 @@ def build_gwalert_notification_msg(gw_alert: GW_alert) -> Message:
         BaseSection().add_text(
             # The \u00a0 is a non-breaking space, used to indent the text
             PlainText(
-                "\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0⏳ Pending validation by the shifter team…",
+                message_content,
                 emoji=True,
             )
         )
@@ -92,15 +99,20 @@ def build_gwalert_notification_msg(gw_alert: GW_alert) -> Message:
     return msg
 
 
-def build_gwalert_data_msg(gw_alert: GW_alert, path_gw_alert: str) -> Message:
+def build_gwalert_data_msg(
+    gw_alert: GW_alert, path_gw_alert: str, nb_alert_received: int
+) -> Message:
     """
     Build a message for the GW alert.
+
     Parameters
     ----------
     gw_alert : GW_alert
         The GW alert object.
     path_gw_alert : str
         The path to the alert folder on OwnCloud.
+    nb_alert_received : int
+        The number of alerts received so far.
     Returns
     -------
     Message
@@ -115,7 +127,11 @@ def build_gwalert_data_msg(gw_alert: GW_alert, path_gw_alert: str) -> Message:
 
     alert_type = gw_alert.event_type
 
-    msg.add_header("{} GW Alert: {}".format(alert_type.to_emoji(), gw_alert.event_id))
+    msg.add_header(
+        "{} Alert N°{} - {}".format(
+            alert_type.to_emoji(), nb_alert_received, alert_type.value
+        )
+    )
     msg.add_divider()
 
     time_since_t0 = Time.now() - gw_alert.get_event_time()
@@ -127,9 +143,6 @@ def build_gwalert_data_msg(gw_alert: GW_alert, path_gw_alert: str) -> Message:
     msg.add_elements(
         BaseSection()
         .add_elements(
-            MarkdownText("*Alert type:*\n{}".format(alert_type.value)),
-        )
-        .add_elements(
             MarkdownText(
                 "*Event time:*\n{} UTC\n(Time since T0: {} seconds)".format(
                     gw_alert.get_event_time().iso, delta_t0_formatted
@@ -138,8 +151,10 @@ def build_gwalert_data_msg(gw_alert: GW_alert, path_gw_alert: str) -> Message:
         )
         .add_elements(
             MarkdownText(
-                "*Prefered class:*\n{} {}".format(
-                    gw_alert.event_class.value, gw_alert.event_class.to_emoji()
+                "*Prefered class:*\n{}({:.0f} %) {}".format(
+                    gw_alert.event_class.value,
+                    gw_alert.class_proba(gw_alert.event_class) * 100,
+                    gw_alert.event_class.to_emoji(),
                 )
             ),
         )
@@ -494,6 +509,7 @@ def new_alert_on_slack(
 ) -> SlackResponse:
     """
     Send the alert to slack
+
     Parameters
     ----------
     gw_alert : GW_alert
