@@ -9,6 +9,7 @@ from astropy.table import Table
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from grandma_gcn.database.base import Base
 
 
 @pytest.fixture
@@ -16,7 +17,12 @@ def sqlite_engine_and_session():
     # Création d'un moteur SQLite en mémoire
     engine = create_engine("sqlite:///:memory:", echo=False, future=True)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    Base.metadata.create_all(engine)
+
     yield engine, SessionLocal
+
+    Base.metadata.drop_all(engine)
 
 
 @pytest.fixture(autouse=True)
