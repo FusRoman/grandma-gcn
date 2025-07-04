@@ -4,6 +4,7 @@ from dotenv import dotenv_values
 from alembic import context
 
 from grandma_gcn.database.base import Base
+import grandma_gcn.database.gw_db  # noqa: F401
 from grandma_gcn.database.init_db import init_db
 from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
 

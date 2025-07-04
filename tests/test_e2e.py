@@ -13,6 +13,7 @@ This allows E2E tests to run in a real or controlled integration environment wit
         def test_my_integration(): ...
 """
 
+from dotenv import dotenv_values
 from numpy.random import random
 import json
 from pathlib import Path
@@ -20,6 +21,7 @@ from pytest import mark
 from unittest.mock import patch, MagicMock
 from astropy.table import Table
 
+from grandma_gcn.database.init_db import init_db
 from tests.conftest import open_notice_file
 
 import time
@@ -104,25 +106,34 @@ def test_e2e_grandma(mocker, logger):
     shared_path = Path("/shared-tmp")
 
     path_e2e_config = Path("gcn_stream_config.toml")
-    # Mock the GCNStream.notice_path attribute to use the temporary directory
-    gcn_stream = GCNStream(path_e2e_config, logger=logger, restart_queue=False)
-    mocker.patch.object(gcn_stream, "notice_path", shared_path)
 
-    # Run the GCN stream
-    gcn_stream.run(test=True)
+    # initialize the sql database connection
+    config = dotenv_values(".env")  # Load environment variables from .env file
+    DATABASE_URL = config["SQLALCHEMY_DATABASE_URI"]
+    engine, session_local = init_db(DATABASE_URL, logger=logger, echo=True)
 
-    # Assertions
-    assert mock_poll_method.call_count == 121
-    assert mock_commit_method.call_count == 2
-    assert len(message_queue) == 0
+    with session_local() as session:
+        # Mock the GCNStream.notice_path attribute to use the temporary directory
+        gcn_stream = GCNStream(
+            path_e2e_config, engine, session, logger=logger, restart_queue=False
+        )
+        mocker.patch.object(gcn_stream, "notice_path", shared_path)
 
-    # Verify that the notices were saved to the temporary directory
-    saved_files = list(shared_path.glob("*.json"))
-    saved_files.sort()
-    assert len(saved_files) == 2
-    with open(saved_files[0], "r") as f:
-        saved_notice = json.load(f)
-    assert saved_notice["superevent_id"] == "S241102br"  # Example assertion
+        # Run the GCN stream
+        gcn_stream.run(test=True)
+
+        # Assertions
+        assert mock_poll_method.call_count == 121
+        assert mock_commit_method.call_count == 2
+        assert len(message_queue) == 0
+
+        # Verify that the notices were saved to the temporary directory
+        saved_files = list(shared_path.glob("*.json"))
+        saved_files.sort()
+        assert len(saved_files) == 2
+        with open(saved_files[0], "r") as f:
+            saved_notice = json.load(f)
+        assert saved_notice["superevent_id"] == "S241102br"  # Example assertion
 
 
 @mark.e2e_light
@@ -190,78 +201,87 @@ def test_e2e_grandma_light(mocker, logger, tiles: dict[str, Table]):
     shared_path = Path("/shared-tmp")
 
     path_e2e_config = Path("gcn_stream_config.toml")
-    # Mock the GCNStream.notice_path attribute to use the temporary directory
-    gcn_stream = GCNStream(path_e2e_config, logger=logger, restart_queue=False)
-    mocker.patch.object(gcn_stream, "notice_path", shared_path)
 
-    # mock the Observation_plan_multiple of the gwemopt package to speed up the test
-    with (
-        patch(
-            "grandma_gcn.gcn_stream.gw_alert.Observation_plan_multiple"
-        ) as mock_obs_plan,
-        patch(
-            "grandma_gcn.gcn_stream.gw_alert.GW_alert.integrated_surface_percentage",
-            return_value=random() * 100,
-        ) as _,
-    ):
-        mock_obs_plan.return_value = (tiles, MagicMock())
-        with patch(
-            "grandma_gcn.worker.gwemopt_worker.open", create=True
-        ) as mock_ascii_open:
+    # initialize the sql database connection
+    config = dotenv_values(".env")  # Load environment variables from .env file
+    DATABASE_URL = config["SQLALCHEMY_DATABASE_URI"]
+    engine, session_local = init_db(DATABASE_URL, logger=logger, echo=True)
 
-            # We mock only the "w" mode for ascii_open
-            # to simulate writing the ascii tiles file.
-            # For other modes, we use the real open function.
-            def open_side_effect(file, mode="r", *args, **kwargs):
-                if mode == "w":
-                    mock_file = MagicMock()
-                    mock_file.__enter__.return_value = MagicMock()
-                    return mock_file
-                else:
-                    # For other modes, use the real open
-                    from builtins import open as real_open
+    with session_local() as session:
+        # Mock the GCNStream.notice_path attribute to use the temporary directory
+        gcn_stream = GCNStream(
+            path_e2e_config, engine, session, logger=logger, restart_queue=False
+        )
+        mocker.patch.object(gcn_stream, "notice_path", shared_path)
 
-                    return real_open(file, mode, *args, **kwargs)
-
-            mock_ascii_open.side_effect = open_side_effect
-
-            custom_filepath = Path("tests/data/coverage_S241102br_Tiling_map.png")
-
-            def patched_post_image_on_slack(
-                slack_client,
-                filepath,
-                filename,
-                filetitle,
-                channel_id,
-                alt_text=None,
-                threads_ts=None,
-            ):
-                return real_post_image_on_slack(
-                    slack_client=slack_client,
-                    filepath=custom_filepath,
-                    filename=filename,
-                    filetitle=filetitle,
-                    channel_id=channel_id,
-                    alt_text=alt_text,
-                    threads_ts=threads_ts,
-                )
-
+        # mock the Observation_plan_multiple of the gwemopt package to speed up the test
+        with (
+            patch(
+                "grandma_gcn.gcn_stream.gw_alert.Observation_plan_multiple"
+            ) as mock_obs_plan,
+            patch(
+                "grandma_gcn.gcn_stream.gw_alert.GW_alert.integrated_surface_percentage",
+                return_value=random() * 100,
+            ) as _,
+        ):
+            mock_obs_plan.return_value = (tiles, MagicMock())
             with patch(
-                "grandma_gcn.worker.gwemopt_worker.post_image_on_slack",
-                side_effect=patched_post_image_on_slack,
-            ) as _:
-                # Run the GCN stream
-                gcn_stream.run(test=True)
+                "grandma_gcn.worker.gwemopt_worker.open", create=True
+            ) as mock_ascii_open:
 
-    # Assertions
-    assert mock_poll_method.call_count == 121
-    assert mock_commit_method.call_count == 2
-    assert len(message_queue) == 0
+                # We mock only the "w" mode for ascii_open
+                # to simulate writing the ascii tiles file.
+                # For other modes, we use the real open function.
+                def open_side_effect(file, mode="r", *args, **kwargs):
+                    if mode == "w":
+                        mock_file = MagicMock()
+                        mock_file.__enter__.return_value = MagicMock()
+                        return mock_file
+                    else:
+                        # For other modes, use the real open
+                        from builtins import open as real_open
 
-    # Verify that the notices were saved to the temporary directory
-    saved_files = list(shared_path.glob("*.json"))
-    saved_files.sort()
-    assert len(saved_files) == 2
-    with open(saved_files[0], "r") as f:
-        saved_notice = json.load(f)
-    assert saved_notice["superevent_id"] == "S241102br"  # Example assertion
+                        return real_open(file, mode, *args, **kwargs)
+
+                mock_ascii_open.side_effect = open_side_effect
+
+                custom_filepath = Path("tests/data/coverage_S241102br_Tiling_map.png")
+
+                def patched_post_image_on_slack(
+                    slack_client,
+                    filepath,
+                    filename,
+                    filetitle,
+                    channel_id,
+                    alt_text=None,
+                    threads_ts=None,
+                ):
+                    return real_post_image_on_slack(
+                        slack_client=slack_client,
+                        filepath=custom_filepath,
+                        filename=filename,
+                        filetitle=filetitle,
+                        channel_id=channel_id,
+                        alt_text=alt_text,
+                        threads_ts=threads_ts,
+                    )
+
+                with patch(
+                    "grandma_gcn.worker.gwemopt_worker.post_image_on_slack",
+                    side_effect=patched_post_image_on_slack,
+                ) as _:
+                    # Run the GCN stream
+                    gcn_stream.run(test=True)
+
+        # Assertions
+        assert mock_poll_method.call_count == 121
+        assert mock_commit_method.call_count == 2
+        assert len(message_queue) == 0
+
+        # Verify that the notices were saved to the temporary directory
+        saved_files = list(shared_path.glob("*.json"))
+        saved_files.sort()
+        assert len(saved_files) == 2
+        with open(saved_files[0], "r") as f:
+            saved_notice = json.load(f)
+        assert saved_notice["superevent_id"] == "S241102br"  # Example assertion

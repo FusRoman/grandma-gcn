@@ -11,7 +11,7 @@ def init_db(
     database_url: str,
     echo: bool = False,
     logger: LoggerNewLine = None,
-) -> tuple[Engine, Session]:
+) -> tuple[Engine, sessionmaker[Session]]:
     """
     Initialise la connexion à la base de données PostgreSQL avec SQLAlchemy.
 

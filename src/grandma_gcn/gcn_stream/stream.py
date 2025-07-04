@@ -121,10 +121,11 @@ def main(gcn_config_path: str = "instance/gcn_config.toml") -> None:
     DATABASE_URL = config["SQLALCHEMY_DATABASE_URI"]
     engine, session_local = init_db(DATABASE_URL, logger=logger, echo=True)
 
-    gcn_stream = GCNStream(
-        Path(gcn_config_path), engine, session_local, logger, restart_queue=True
-    )
-    gcn_stream.run()
+    with session_local() as session:
+        gcn_stream = GCNStream(
+            Path(gcn_config_path), engine, session, logger, restart_queue=True
+        )
+        gcn_stream.run()
 
 
 if __name__ == "__main__":  # pragma: no cover
