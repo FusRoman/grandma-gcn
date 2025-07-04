@@ -1,5 +1,6 @@
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError
 from sqlalchemy import text
 
@@ -10,7 +11,7 @@ def init_db(
     database_url: str,
     echo: bool = False,
     logger: LoggerNewLine = None,
-) -> tuple[Engine, sessionmaker]:
+) -> tuple[Engine, Session]:
     """
     Initialise la connexion à la base de données PostgreSQL avec SQLAlchemy.
 
@@ -22,7 +23,7 @@ def init_db(
     Return
     ----------
     * `engine`: SQLAlchemy Engine — Moteur de connexion à la base
-    * `SessionLocal`: sessionmaker — Classe de session SQLAlchemy
+    * `SessionLocal`: Session — Classe de session SQLAlchemy
     """
     try:
         engine = create_engine(database_url, echo=echo, future=True)

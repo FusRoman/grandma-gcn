@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import Engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session
 
 from grandma_gcn.gcn_stream.consumer import Consumer
 import tomli
@@ -17,7 +17,7 @@ class GCNStream:
         self,
         path_gcn_config: Path,
         engine: Engine,
-        session_local: sessionmaker,
+        session_local: Session,
         logger: LoggerNewLine,
         restart_queue: bool = False,
     ) -> None:
@@ -63,7 +63,7 @@ class GCNStream:
         return self._engine
 
     @property
-    def session_local(self) -> sessionmaker:
+    def session_local(self) -> Session:
         """
         Get the SQLAlchemy session local used to create sessions
         """

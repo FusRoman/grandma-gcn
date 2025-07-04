@@ -176,7 +176,7 @@ class Consumer(KafkaConsumer):
             )
             return
 
-    def _handle_significant_alert(self, gw_alert) -> tuple[str, str]:
+    def _handle_significant_alert(self, gw_alert: GW_alert) -> tuple[str, str]:
         """
         Handles the starting of the workflow for a significant alert (slack, owncloud, DB).
         This method performs the following steps:

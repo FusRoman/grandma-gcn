@@ -1,7 +1,7 @@
 from typing import Self
 from sqlalchemy import Column, String, Integer
 from grandma_gcn.database.base import Base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session
 
 
 class GW_alert(Base):
@@ -14,7 +14,7 @@ class GW_alert(Base):
     def __repr__(self):
         return f"<GW_alert(triggerId='{self.triggerId}', thread_ts='{self.thread_ts}')>"
 
-    def set_thread_ts(self, thread_ts: str | None, session: sessionmaker):
+    def set_thread_ts(self, thread_ts: str | None, session: Session):
         """
         Set the thread timestamp for the alert.
         This method commits the change to the database.
@@ -30,7 +30,7 @@ class GW_alert(Base):
         session.commit()
 
     @classmethod
-    def get_by_trigger_id(cls, session: sessionmaker, trigger_id: str) -> Self | None:
+    def get_by_trigger_id(cls, session: Session, trigger_id: str) -> Self | None:
         """
         Retrieve a GW_alert instance by its triggerId.
 
@@ -48,7 +48,7 @@ class GW_alert(Base):
         """
         return session.query(cls).filter_by(triggerId=trigger_id).first()
 
-    def increment_reception_count(self, session: sessionmaker):
+    def increment_reception_count(self, session: Session):
         """
         Increment the reception count of an existing alert.
 
@@ -97,7 +97,7 @@ class GW_alert(Base):
 
     @classmethod
     def get_or_set_thread_ts(
-        cls, session: sessionmaker, trigger_id: str, thread_ts: str | None = None
+        cls, session: Session, trigger_id: str, thread_ts: str | None = None
     ) -> Self:
         """
         Get an existing alert and set its thread timestamp if it is not already set.
@@ -123,7 +123,7 @@ class GW_alert(Base):
 
     @classmethod
     def insert_or_increment(
-        cls, session: sessionmaker, trigger_id: str, thread_ts: str | None = None
+        cls, session: Session, trigger_id: str, thread_ts: str | None = None
     ) -> Self:
         """
         Insert a new alert or increment the reception count if it already exists.
