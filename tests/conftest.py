@@ -7,10 +7,31 @@ from grandma_gcn.gcn_stream.gcn_logging import init_logging
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from astropy.table import Table
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from grandma_gcn.database.base import Base
+
+
+@pytest.fixture
+def sqlite_engine_and_session():
+    # Création d'un moteur SQLite en mémoire
+    engine = create_engine("sqlite:///:memory:", echo=False, future=True)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    Base.metadata.create_all(engine)
+
+    yield engine, SessionLocal
+
+    Base.metadata.drop_all(engine)
+
 
 @pytest.fixture(autouse=True)
 def set_fake_slack_token(monkeypatch, request):
-    if "e2e" in request.keywords:
+    """
+    Fixture to set a fake Slack token for tests that do not require real Slack interaction.
+    This fixture is automatically applied to all tests unless the test is marked with "e2e" or "e2e_light".
+    """
+    if "e2e" in request.keywords or "e2e_light" in request.keywords:
         yield
     else:
         monkeypatch.setenv("FINK_SLACK_TOKEN", "fake-token-for-tests")
@@ -110,4 +131,11 @@ def owncloud_client(gcn_config_path, logger):
 
 @pytest.fixture
 def tiles() -> dict[str, Table]:
-    return pickle.load(open("tests/data/tiles.pickle", "rb"))
+    # tiles contains the following telescopes: ['TCH', 'TRE', 'TCA', 'FZU-CTA-N', 'FZU-Auger']
+    tiles = pickle.load(open("tests/data/tiles.pickle", "rb"))
+
+    tiles["KAO"] = tiles["Colibri"] = tiles["UBAI-T60S"] = tiles["TRT-SBO"] = tiles[
+        "TRT-SRO"
+    ] = tiles["NOWT"] = tiles["OPD-1.6"] = tiles["Abastunami-T70"] = None
+
+    return tiles

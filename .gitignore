@@ -182,3 +182,7 @@ gwemopt_task
 coverage_S241102br_Tiling_map.png
 galaxies_table.pickle
 test_coverage_tiles.py
+scripts/delete_grand_gcn.sh
+scripts/init_grandma_gcn_vm.sh
+test_db_connexion.py
+test_galaxy_tables.py

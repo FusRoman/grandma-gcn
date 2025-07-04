@@ -34,7 +34,7 @@ Example: Load and process a GW alert
 
 ```python
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
-from grandma_gcn.slackbot.gw_message import build_gwalert_msg
+from grandma_gcn.slackbot.gw_message import build_gwalert_data_msg
 
 # Load a GW alert from a notice file
 with open("path/to/notice.json", "rb") as fp:
@@ -42,7 +42,7 @@ with open("path/to/notice.json", "rb") as fp:
 gw_alert = GW_alert(notice_bytes, BBH_threshold=0.5, Distance_threshold=500, ErrorRegion_threshold=100)
 
 # Build a Slack message
-msg = build_gwalert_msg(gw_alert)
+msg = build_gwalert_data_msg(gw_alert)
 ```
 
 ## Project Structure

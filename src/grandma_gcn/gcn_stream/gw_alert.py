@@ -418,8 +418,8 @@ class GW_alert:
         )
 
     class GRANDMA_Action(Enum):
-        GO_GRANDMA = "🚀 *GO GRANDMA*"
-        NO_GRANDMA = "❌ *NO GRANDMA*"
+        GO_GRANDMA = "🚀 *Should we GO GRANDMA ?*"
+        NO_GRANDMA = "❌ *PROBABLY NO GRANDMA ?*"
 
     def gw_score(self) -> tuple[int, str, GRANDMA_Action]:
         """
@@ -684,8 +684,6 @@ class GW_alert:
 
         unique_tiles = unique(tiles_table, keys="tile_id", keep="first")
         prob_covered = sum(unique_tiles["prob_sum"])
-
-        print("Total probability density in skymap:", sum(prob))
 
         integrated_proba_percentage = ((prob_covered / sum(prob)) * 100).value
 

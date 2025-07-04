@@ -299,10 +299,6 @@ def test_process_alert_calls(mocker, tiles: dict[str, Table]):
                             }
 
                             mock_open.return_value.__enter__.return_value = MagicMock()
-
-                            tiles["KAO"] = None  # Simulate no data for KAO
-                            tiles["Colibri"] = None  # Simulate no data for Colibri
-                            tiles["UBAI-T60S"] = None  # Simulate no data for TCH
                             mock_obs_plan.return_value = (tiles, MagicMock())
 
                             # Patch OwncloudClient.mkdir to track calls
