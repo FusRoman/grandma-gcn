@@ -54,6 +54,21 @@ services:
         "pip install --no-cache-dir -e /home/${USR}/code && exec python -m celery -A grandma_gcn.worker.celery_app worker --loglevel=DEBUG",
       ]
 
+  db:
+    image: postgres
+    restart: unless-stopped
+    ports:
+        - "${POSTGRES_PORT}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+        - pgdata:/var/lib/postgresql/data
+        - ./scripts/init_grandma_gcn_db.sql:/docker-entrypoint-initdb.d/init.sql
+
 volumes:
   e2e_volume:
     name: "e2e_volume"
+  pgdata:
+    name: "grandmagcn_pgdata"
