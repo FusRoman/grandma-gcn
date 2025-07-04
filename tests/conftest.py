@@ -7,6 +7,17 @@ from grandma_gcn.gcn_stream.gcn_logging import init_logging
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from astropy.table import Table
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+
+@pytest.fixture
+def sqlite_engine_and_session():
+    # Création d'un moteur SQLite en mémoire
+    engine = create_engine("sqlite:///:memory:", echo=False, future=True)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    yield engine, SessionLocal
+
 
 @pytest.fixture(autouse=True)
 def set_fake_slack_token(monkeypatch, request):

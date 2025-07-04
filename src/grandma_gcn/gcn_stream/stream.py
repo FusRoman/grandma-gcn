@@ -1,16 +1,23 @@
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import Engine
+from sqlalchemy.orm import sessionmaker
+
 from grandma_gcn.gcn_stream.consumer import Consumer
 import tomli
 from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine, init_logging
 from fink_utils.slack_bot.bot import init_slackbot
+from grandma_gcn.database.init_db import init_db
+from dotenv import dotenv_values
 
 
 class GCNStream:
     def __init__(
         self,
         path_gcn_config: Path,
+        engine: Engine,
+        session_local: sessionmaker,
         logger: LoggerNewLine,
         restart_queue: bool = False,
     ) -> None:
@@ -22,6 +29,9 @@ class GCNStream:
         restart_queue : bool, optional
             restart the polling of the gcn message from the beginning (offset 0), by default False
         """
+        self._engine = engine
+        self._session_local = session_local
+
         self.logger = logger
         self.path_config = path_gcn_config
 
@@ -44,6 +54,20 @@ class GCNStream:
     @property
     def gcn_config(self) -> dict[str, Any]:
         return self._gcn_config
+
+    @property
+    def engine(self) -> Engine:
+        """
+        Get the SQLAlchemy engine used to connect to the database
+        """
+        return self._engine
+
+    @property
+    def session_local(self) -> sessionmaker:
+        """
+        Get the SQLAlchemy session local used to create sessions
+        """
+        return self._session_local
 
     def run(self, test: bool = False) -> None:
         """
@@ -91,7 +115,15 @@ def main(gcn_config_path: str = "instance/gcn_config.toml") -> None:
     Launch the GCN stream, an infinite loop waiting for notices from the GCN network.
     """
     logger = init_logging(logger_name="gcn_stream")
-    gcn_stream = GCNStream(Path(gcn_config_path), logger, restart_queue=True)
+
+    # initialize the sql database connection
+    config = dotenv_values(".env")  # Load environment variables from .env file
+    DATABASE_URL = config["SQLALCHEMY_DATABASE_URI"]
+    engine, session_local = init_db(DATABASE_URL, logger=logger, echo=True)
+
+    gcn_stream = GCNStream(
+        Path(gcn_config_path), engine, session_local, logger, restart_queue=True
+    )
     gcn_stream.run()
 
 

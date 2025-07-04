@@ -14,13 +14,17 @@ from grandma_gcn.gcn_stream.gcn_logging import init_logging
 from tests.test_e2e import push_message_for_test
 
 
-def test_init_gcn_stream(gcn_config_path, logger):
+def test_init_gcn_stream(sqlite_engine_and_session, gcn_config_path, logger):
     """
     Test the initialization of the GCN stream
     """
     from grandma_gcn.gcn_stream.stream import GCNStream
 
-    gcn_stream = GCNStream(gcn_config_path, logger=logger, restart_queue=False)
+    engine, session_local = sqlite_engine_and_session
+
+    gcn_stream = GCNStream(
+        gcn_config_path, engine, session_local, logger=logger, restart_queue=False
+    )
     assert isinstance(gcn_stream, GCNStream)
 
     gcn_config = gcn_stream.gcn_config
@@ -112,7 +116,7 @@ def test_start_poll_loop(mocker, mock_gcn_stream):
     assert len(message_queue) == 0
 
 
-def test_gcn_stream_run(mocker, gcn_config_path, logger):
+def test_gcn_stream_run(mocker, sqlite_engine_and_session, gcn_config_path, logger):
     """
     Test the run method of the GCN stream
     """
@@ -153,7 +157,10 @@ def test_gcn_stream_run(mocker, gcn_config_path, logger):
         "grandma_gcn.gcn_stream.consumer.Consumer.process_alert"
     )
 
-    gcn_stream = GCNStream(gcn_config_path, logger=logger, restart_queue=False)
+    engine, session_local = sqlite_engine_and_session
+    gcn_stream = GCNStream(
+        gcn_config_path, engine, session_local, logger=logger, restart_queue=False
+    )
 
     # Run the GCN stream
     gcn_stream.run(test=True)
@@ -165,7 +172,9 @@ def test_gcn_stream_run(mocker, gcn_config_path, logger):
     assert len(message_queue) == 0
 
 
-def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
+def test_gcn_stream_with_real_notice(
+    mocker, sqlite_engine_and_session, gcn_config_path, logger
+):
     """
     Test the run method of the GCN stream with a real notice
     """
@@ -235,7 +244,10 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
         temp_path = Path(temp_dir)
 
         # Mock the GCNStream.notice_path attribute to use the temporary directory
-        gcn_stream = GCNStream(gcn_config_path, logger=logger, restart_queue=False)
+        engine, session_local = sqlite_engine_and_session
+        gcn_stream = GCNStream(
+            gcn_config_path, engine, session_local, logger=logger, restart_queue=False
+        )
         mocker.patch.object(gcn_stream, "notice_path", temp_path)
 
         # Run the GCN stream
@@ -266,25 +278,37 @@ def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
         )
 
 
-def test_main_calls_gcnstream_and_run(tmp_path):
+def test_main_calls_gcnstream_and_run(tmp_path, sqlite_engine_and_session):
+    # Création du fichier de config toml temporaire
     fake_config_path = tmp_path / "fake_config.toml"
     fake_config_path.write_text(
         "[PATH]\ngcn_stream_log_path='log.log'\nnotice_path='.'\n"
     )
 
+    # Récupère engine et session_local depuis la fixture
+    engine, session_local = sqlite_engine_and_session
+
     with (
         patch("grandma_gcn.gcn_stream.stream.init_logging") as mock_init_logging,
+        patch("grandma_gcn.gcn_stream.stream.init_db") as mock_init_db,
         patch("grandma_gcn.gcn_stream.stream.GCNStream") as mock_gcnstream_cls,
     ):
-
+        # Mock le logger
         mock_logger = MagicMock()
         mock_init_logging.return_value = mock_logger
 
+        # Mock le retour de init_db avec la session/engine de la fixture
+        mock_init_db.return_value = (engine, session_local)
+
+        # Mock la classe GCNStream et sa méthode run
         mock_gcnstream = MagicMock()
         mock_gcnstream_cls.return_value = mock_gcnstream
 
+        # Appelle la vraie fonction main (qui va utiliser tous les mocks)
         stream.main(gcn_config_path=str(fake_config_path))
 
+        # Vérifications
         mock_init_logging.assert_called_once_with(logger_name="gcn_stream")
+        mock_init_db.assert_called_once()
         mock_gcnstream_cls.assert_called_once()
         mock_gcnstream.run.assert_called_once()
