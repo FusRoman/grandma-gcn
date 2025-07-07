@@ -140,6 +140,13 @@ def build_gwalert_data_msg(
     _, region_size_90, mean_distance, mean_sigma = gw_alert.get_error_region(0.9)
     _, region_size_50, _, _ = gw_alert.get_error_region(0.5)
 
+    class_event = gw_alert.event_class
+    others_class = [e for e in GW_alert.CBC_proba if e != class_event]
+    other_class_msg = "\n".join(
+        f"- {cbc_class.value} ({gw_alert.class_proba(cbc_class) * 100: .0f} %)"
+        for cbc_class in others_class
+    )
+
     msg.add_elements(
         BaseSection()
         .add_elements(
@@ -152,11 +159,14 @@ def build_gwalert_data_msg(
         .add_elements(
             MarkdownText(
                 "*Prefered class:*\n{}({:.0f} %) {}".format(
-                    gw_alert.event_class.value,
-                    gw_alert.class_proba(gw_alert.event_class) * 100,
-                    gw_alert.event_class.to_emoji(),
+                    class_event.value,
+                    gw_alert.class_proba(class_event) * 100,
+                    class_event.to_emoji(),
                 )
             ),
+        )
+        .add_elements(
+            MarkdownText("*Other classes:*\n{}".format(other_class_msg)),
         )
         .add_elements(
             MarkdownText(
