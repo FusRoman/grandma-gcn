@@ -1,8 +1,9 @@
-from pathlib import Path
-from celery import Celery
-from dotenv import dotenv_values
 from os import environ
+from pathlib import Path
+
+from celery import Celery
 from celery.utils.log import get_task_logger
+from dotenv import dotenv_values
 
 
 def initialize_celery(env_file: Path) -> Celery:
@@ -53,7 +54,7 @@ logger.debug(environ)
 if env_file_variable in environ:
     name_env_file = environ.get(env_file_variable)
     logger.warning(
-        f"{env_file_variable} environment variable detected\ninitialise flask app using the environement file named {name_env_file}"
+        f"{env_file_variable} environment variable detected\ninitialise flask app using the environment file named {name_env_file}"
     )
 
 celery = initialize_celery(Path(name_env_file))

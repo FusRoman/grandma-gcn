@@ -1,12 +1,17 @@
-from celery import chord
-from gcn_kafka import Consumer as KafkaConsumer
 import uuid
 
+from celery import chord
+from gcn_kafka import Consumer as KafkaConsumer
 from yarl import URL
 
+from grandma_gcn.database.gw_db import GW_alert as GW_alert_DB
 from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
-from grandma_gcn.slackbot.gw_message import build_gwalert_msg, new_alert_on_slack
+from grandma_gcn.slackbot.gw_message import (
+    build_gwalert_data_msg,
+    build_gwalert_notification_msg,
+    new_alert_on_slack,
+)
 from grandma_gcn.worker.gwemopt_worker import gwemopt_post_task, gwemopt_task
 from grandma_gcn.worker.owncloud_client import OwncloudClient
 
@@ -70,7 +75,7 @@ class Consumer(KafkaConsumer):
         -------
         tuple[str, URL]: The path to the alert folder on ownCloud and the URL of the alert folder.
         """
-        path_gw_alert = "Candidates/GW/{}".format(gw_alert.event_id)
+        path_gw_alert = f"Candidates/GW/{gw_alert.event_id}"
         # create a new folder on ownCloud for this alert
         path_owncloud_gw = self.owncloud_client.mkdir(path_gw_alert)
 
@@ -142,78 +147,186 @@ class Consumer(KafkaConsumer):
             notice,
             self.gcn_stream.gcn_config["THRESHOLD"],
         )
-        score, _, _ = gw_alert.gw_score()
-        if score > 1:
+
+        if gw_alert.is_significant:
             self.logger.info("Significant alert detected")
+            # Initialize the workflow for the significant alert
+            # This includes sending the initial alert to Slack, creating the ownCloud folder, and saving the
+            # alert in the database
+            # If the alert already exists in the database, it will increment the reception count and set
+            # the thread timestamp if it is not already set.
+            owncloud_alert_url, gw_thread_ts = self._handle_significant_alert(gw_alert)
 
-            # save the notice on disk to transfer it to the celery worker
-            path_notice = gw_alert.save_notice(self.gcn_stream.notice_path)
+            score, _, _ = gw_alert.gw_score()
+            if score > 1:
+                # Process the significant alert with the automatic gwemopt process
+                self.automatic_gwemopt_process(
+                    gw_alert, owncloud_alert_url, gw_thread_ts
+                )
 
-            self.logger.info(f"Notice saved at {path_notice}")
+            else:
+                self.logger.info(
+                    f"Alert {gw_alert.event_id} is below the automatic gwemopt score, score: {score}, skipping processing."
+                )
+                return
 
-            # Initialize ownCloud folders for this alert
-            path_gw_alert, owncloud_alert_url = self.init_owncloud_folders(gw_alert)
+        else:
+            self.logger.info(
+                f"Alert {gw_alert.event_id} is not significant, skipping processing."
+            )
+            return
 
-            self.logger.info(f"Folder created on ownCloud, url: {owncloud_alert_url}")
+    def _handle_significant_alert(self, gw_alert: GW_alert) -> tuple[str, str]:
+        """
+        Handles the starting of the workflow for a significant alert (slack, owncloud, DB).
+        This method performs the following steps:
+        1. Checks if the alert already exists in the database.
+        2. If it does not exist, creates a new entry in the database and sets the thread timestamp.
+        3. If it exists, increments the reception count.
 
-            # send a message to Slack with the alert information
-            new_alert_response = new_alert_on_slack(
+        Parameters
+        ----------
+        gw_alert : GW_alert
+            The significant GW alert object containing event information and thresholds.
+
+        Returns
+        -------
+        Tuple[owncloud_url, slack_thread_ts]
+        """
+        gw_alert_db = GW_alert_DB.get_or_create(
+            self.gcn_stream.session_local, trigger_id=gw_alert.event_id
+        )
+
+        self.logger.info(
+            f"Alert {gw_alert.event_id} with triggerId {gw_alert_db.triggerId} "
+            f"and reception count {gw_alert_db.reception_count}"
+        )
+
+        if gw_alert_db.thread_ts is None:
+            notif_alert_response = new_alert_on_slack(
                 gw_alert,
-                build_gwalert_msg,
+                build_gwalert_notification_msg,
                 self.gcn_stream.slack_client,
                 channel=self.gw_alert_channel,
                 logger=self.logger,
-                path_gw_alert=path_gw_alert,
             )
 
-            self.logger.info("Send gw alert to slack")
-
-            self.logger.info("Sending gwemopt task to celery worker")
-
-            telescopes_list = self.gcn_stream.gcn_config["GWEMOPT"]["telescopes"]
-            number_of_tiles = self.gcn_stream.gcn_config["GWEMOPT"]["number_of_tiles"]
-            observation_strategy = self.gcn_stream.gcn_config["GWEMOPT"][
-                "observation_strategy"
-            ]
-
-            # construct a list of tasks for each sublist of telescopes, number of tiles and observation strategy
-            gwemopt_tasks = [
-                gwemopt_task.s(
-                    tel_list,
-                    nb_tiles_list,
-                    self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
-                    self.gw_alert_channel,
-                    self.gw_channel_id,
-                    self.gcn_stream.gcn_config["OWNCLOUD"],
-                    str(owncloud_alert_url),
-                    str(path_notice),
-                    "_".join(
-                        [
-                            gw_alert.event_id,
-                            obs_strat,
-                            "_".join(tel_list),
-                            uuid.uuid4().hex,
-                        ]
-                    ),
-                    self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
-                    gw_alert.thresholds,
-                    obs_strat,
-                    new_alert_response["ts"],
-                    self.gcn_stream.gcn_config["GWEMOPT"]["path_galaxy_catalog"],
-                    self.gcn_stream.gcn_config["GWEMOPT"]["galaxy_catalog"],
-                )
-                for tel_list, nb_tiles_list, obs_strat in zip(
-                    telescopes_list,
-                    number_of_tiles,
-                    observation_strategy,
-                )
-            ]
-
-            chord(gwemopt_tasks)(
-                gwemopt_post_task.s(
-                    owncloud_config=self.gcn_stream.gcn_config["OWNCLOUD"],
-                )
+            gw_alert_db.set_thread_ts(
+                notif_alert_response["ts"], self.gcn_stream.session_local
             )
+
+            self.logger.info(
+                f"Thread timestamp set for alert {gw_alert.event_id}: {notif_alert_response['ts']}"
+            )
+
+        else:
+            gw_alert_db.increment_reception_count(self.gcn_stream.session_local)
+
+        gw_thread_ts = gw_alert_db.thread_ts
+
+        # Initialize ownCloud folders for this alert
+        path_gw_alert, owncloud_alert_url = self.init_owncloud_folders(gw_alert)
+
+        self.logger.info(f"Folder created on ownCloud, url: {owncloud_alert_url}")
+
+        # Send main alert info to Slack (in thread)
+        _ = new_alert_on_slack(
+            gw_alert,
+            build_gwalert_data_msg,
+            self.gcn_stream.slack_client,
+            channel=self.gw_alert_channel,
+            logger=self.logger,
+            thread_ts=gw_thread_ts,
+            path_gw_alert=path_gw_alert,
+            nb_alert_received=gw_alert_db.reception_count,
+        )
+
+        self.logger.info("Send gw alert to slack")
+
+        return owncloud_alert_url, gw_thread_ts
+
+    def automatic_gwemopt_process(
+        self, gw_alert: GW_alert, owncloud_alert_url: URL, gw_thread_ts: str
+    ) -> None:
+        """
+        Process a significant GW alert by generating an observation plan using the GWEMOPT task.
+        This method performs the following steps:
+        1. Logs the processing of the significant alert.
+        2. Saves the alert notice to disk for transfer to the Celery worker.
+        3. Initializes the ownCloud folders for the alert.
+        4. Constructs a list of Celery tasks for each GWEMOPT configuration (telescopes, number of tiles, observation strategy).
+        5. Sends the tasks to the Celery worker using a chord, which will execute the tasks in parallel and trigger a post-processing task upon
+        completion.
+
+        Parameters
+        ----------
+        gw_alert : GW_alert
+            The significant GW alert object containing event information and thresholds.
+        owncloud_alert_url : URL
+            The URL of the alert folder on ownCloud where the notice will be saved.
+        gw_thread_ts : str
+            The thread timestamp for the alert on Slack, used to link the alert messages.
+
+        Raises
+        ------
+        Exception
+            Any exception during the processing is logged and re-raised.
+        """
+        self.logger.info(
+            f"Processing significant alert {gw_alert.event_id} with score > 1, Observation plan will be generated."
+        )
+
+        # save the notice on disk to transfer it to the celery worker
+        path_notice = gw_alert.save_notice(self.gcn_stream.notice_path)
+
+        self.logger.info(f"Notice saved at {path_notice}")
+
+        self.logger.info("Sending gwemopt task to celery worker")
+
+        telescopes_list = self.gcn_stream.gcn_config["GWEMOPT"]["telescopes"]
+        number_of_tiles = self.gcn_stream.gcn_config["GWEMOPT"]["number_of_tiles"]
+        observation_strategy = self.gcn_stream.gcn_config["GWEMOPT"][
+            "observation_strategy"
+        ]
+
+        # construct a list of tasks for each sublist of telescopes, number of tiles and observation strategy
+        gwemopt_tasks = [
+            gwemopt_task.s(
+                tel_list,
+                nb_tiles_list,
+                self.gcn_stream.gcn_config["GWEMOPT"]["nside_flat"],
+                self.gw_alert_channel,
+                self.gw_channel_id,
+                self.gcn_stream.gcn_config["OWNCLOUD"],
+                str(owncloud_alert_url),
+                str(path_notice),
+                "_".join(
+                    [
+                        gw_alert.event_id,
+                        obs_strat,
+                        "_".join(tel_list),
+                        uuid.uuid4().hex,
+                    ]
+                ),
+                self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
+                gw_alert.thresholds,
+                obs_strat,
+                gw_thread_ts,
+                self.gcn_stream.gcn_config["GWEMOPT"]["path_galaxy_catalog"],
+                self.gcn_stream.gcn_config["GWEMOPT"]["galaxy_catalog"],
+            )
+            for tel_list, nb_tiles_list, obs_strat in zip(
+                telescopes_list,
+                number_of_tiles,
+                observation_strategy,
+            )
+        ]
+
+        chord(gwemopt_tasks)(
+            gwemopt_post_task.s(
+                owncloud_config=self.gcn_stream.gcn_config["OWNCLOUD"],
+            )
+        )
 
     def start_poll_loop(
         self, interval_between_polls: int = 1, max_retries: int = 120

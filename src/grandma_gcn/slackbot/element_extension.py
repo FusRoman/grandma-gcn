@@ -1,7 +1,6 @@
-from typing import List, Self, Union
-from fink_utils.slack_bot.rich_text.rich_text_element import (
-    RichTextStyle,
-)
+from typing import Self
+
+from fink_utils.slack_bot.rich_text.rich_text_element import RichTextStyle
 
 
 class RichTextElement:
@@ -12,7 +11,7 @@ class RichTextElement:
         super().__init__()
         self.element = {"type": "rich_text", "elements": []}
 
-    def add_elements(self, elements: Union[Self, List[Self]]) -> Self:
+    def add_elements(self, elements: Self | list[Self]) -> Self:
         if type(elements) is list:
             self.element["elements"] += [el.get_element() for el in elements]
         else:
@@ -43,6 +42,23 @@ class Text:
     def get_element(self):
         return self.text
 
+    def set_emoji(self, emoji: bool) -> Self:
+        """
+        Set whether the text should be treated as an emoji.
+
+        Parameters
+        ----------
+        emoji : bool
+            Whether to treat the text as an emoji.
+
+        Returns
+        -------
+        Self
+            The updated text element.
+        """
+        self.text["emoji"] = emoji
+        return self
+
     def add_style(self, style: RichTextStyle) -> Self:
         """
         Set the style of the text element.
@@ -67,15 +83,34 @@ class BaseSection:
         A class representing a section.
         """
         super().__init__()
-        self.section = {"type": "section", "fields": []}
+        self.section = {"type": "section"}
 
-    def add_elements(
-        self, elements: Union[RichTextElement, List[RichTextElement]]
-    ) -> Self:
+    def add_elements(self, elements: RichTextElement | list[RichTextElement]) -> Self:
+        if "fields" not in self.section:
+            self.section["fields"] = []
+
         if type(elements) is list:
             self.section["fields"] += [el.get_element() for el in elements]
         else:
             self.section["fields"].append(elements.get_element())
+        return self
+
+    def add_text(self, text: Text) -> Self:
+        """
+        Add a text element to the section.
+
+        Parameters
+        ----------
+        text : Text
+            The text element to add.
+
+        Returns
+        -------
+        Self
+            The updated section.
+        """
+        if "text" not in self.section:
+            self.section["text"] = text.get_element()
         return self
 
     def add_accessory(self, accessory: dict) -> Self:
@@ -113,6 +148,23 @@ class MarkdownText(Text):
         self.text["type"] = "mrkdwn"
 
 
+class PlainText(Text):
+    def __init__(self, text: str, emoji: bool = False) -> None:
+        """
+        A plain text element
+
+        Parameters
+        ----------
+        text : str
+            text
+        emoji : bool, optional
+            whether the text should be treated as an emoji, by default False
+        """
+        super().__init__(text=text)
+        self.text["type"] = "plain_text"
+        self.text["emoji"] = emoji
+
+
 class URLButton:
     def __init__(self, text: str, url: str, emoji: bool) -> None:
         """
@@ -144,7 +196,7 @@ class Action:
         super().__init__()
         self.action = {"type": "actions", "elements": []}
 
-    def add_elements(self, elements: Union[URLButton, List[URLButton]]) -> Self:
+    def add_elements(self, elements: URLButton | list[URLButton]) -> Self:
         if type(elements) is list:
             self.action["elements"] += [el.get_element() for el in elements]
         else:

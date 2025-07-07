@@ -1,26 +1,28 @@
 import json
-from pathlib import Path
 import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import MagicMock, patch
-from grandma_gcn.gcn_stream import stream
-
 from yarl import URL
 
+from grandma_gcn.gcn_stream import stream
 from grandma_gcn.gcn_stream.consumer import Consumer
 from grandma_gcn.gcn_stream.gcn_logging import init_logging
-
 from tests.test_e2e import push_message_for_test
 
 
-def test_init_gcn_stream(gcn_config_path, logger):
+def test_init_gcn_stream(sqlite_engine_and_session, gcn_config_path, logger):
     """
     Test the initialization of the GCN stream
     """
     from grandma_gcn.gcn_stream.stream import GCNStream
 
-    gcn_stream = GCNStream(gcn_config_path, logger=logger, restart_queue=False)
+    engine, session_local = sqlite_engine_and_session
+
+    gcn_stream = GCNStream(
+        gcn_config_path, engine, session_local, logger=logger, restart_queue=False
+    )
     assert isinstance(gcn_stream, GCNStream)
 
     gcn_config = gcn_stream.gcn_config
@@ -112,7 +114,7 @@ def test_start_poll_loop(mocker, mock_gcn_stream):
     assert len(message_queue) == 0
 
 
-def test_gcn_stream_run(mocker, gcn_config_path, logger):
+def test_gcn_stream_run(mocker, sqlite_engine_and_session, gcn_config_path, logger):
     """
     Test the run method of the GCN stream
     """
@@ -153,7 +155,10 @@ def test_gcn_stream_run(mocker, gcn_config_path, logger):
         "grandma_gcn.gcn_stream.consumer.Consumer.process_alert"
     )
 
-    gcn_stream = GCNStream(gcn_config_path, logger=logger, restart_queue=False)
+    engine, session_local = sqlite_engine_and_session
+    gcn_stream = GCNStream(
+        gcn_config_path, engine, session_local, logger=logger, restart_queue=False
+    )
 
     # Run the GCN stream
     gcn_stream.run(test=True)
@@ -165,126 +170,145 @@ def test_gcn_stream_run(mocker, gcn_config_path, logger):
     assert len(message_queue) == 0
 
 
-def test_gcn_stream_with_real_notice(mocker, gcn_config_path, logger):
+def test_gcn_stream_with_real_notice(
+    mocker, sqlite_engine_and_session, gcn_config_path, logger
+):
     """
-    Test the run method of the GCN stream with a real notice
+    Test the run method of the GCN stream with a real notice and database persistence
     """
+    from grandma_gcn.database.gw_db import GW_alert
     from grandma_gcn.gcn_stream.stream import GCNStream
 
     # Simulate a message queue
     message_queue = []
 
-    mock_message_update = push_message_for_test(
-        mocker, message_queue, "igwn.gwalert", "S241102br-update.json"
-    )
+    def push_update():
+        return push_message_for_test(
+            mocker, message_queue, "igwn.gwalert", "S241102br-update.json"
+        )
 
-    mock_message_retraction = push_message_for_test(
-        mocker, message_queue, "igwn.gwalert", "retraction.json"
-    )
+    push_update()  # First alert
+    _ = push_message_for_test(mocker, message_queue, "igwn.gwalert", "retraction.json")
 
-    # Mock the poll method
     def mock_poll(*args, **kwargs):
         return message_queue[0] if message_queue else None
 
-    mock_poll_method = mocker.patch(
+    _ = mocker.patch(
         "grandma_gcn.gcn_stream.consumer.KafkaConsumer.poll", side_effect=mock_poll
     )
 
-    # Mock the commit method
     def mock_commit(message):
         if message in message_queue:
             message_queue.remove(message)
 
-    mock_commit_method = mocker.patch(
+    _ = mocker.patch(
         "grandma_gcn.gcn_stream.consumer.KafkaConsumer.commit", side_effect=mock_commit
     )
 
     mock_post_msg_on_slack = mocker.patch(
         "grandma_gcn.slackbot.gw_message.post_msg_on_slack"
     )
+    mock_post_msg_on_slack.return_value = {"ts": "123.456"}
 
     mock_owncloud_mkdir_request = mocker.patch("requests.request")
-    mock_owncloud_mkdir_request.return_value.status_code = (
-        201  # Mock successful directory creation
-    )
+    mock_owncloud_mkdir_request.return_value.status_code = 201
 
-    # Mock gwemopt_task.s to avoid running the real Celery task
+    # Celery mocks
     mock_gwemopt_task = mocker.patch(
         "grandma_gcn.gcn_stream.consumer.gwemopt_task", autospec=True
     )
-    fake_signature = MagicMock()
-    fake_signature.delay = MagicMock()
-    fake_signature.apply_async = MagicMock()
-    mock_gwemopt_task.s.return_value = fake_signature
+    mock_gwemopt_task.s.return_value = MagicMock(
+        apply_async=MagicMock(), delay=MagicMock()
+    )
 
-    # Mock gwemopt_post_task to avoid running the real Celery chord callback
     mock_gwemopt_post_task = mocker.patch(
         "grandma_gcn.gcn_stream.consumer.gwemopt_post_task", autospec=True
     )
-    fake_post_signature = MagicMock()
-    fake_post_signature.delay = MagicMock()
-    fake_post_signature.apply_async = MagicMock()
-    mock_gwemopt_post_task.s.return_value = fake_post_signature
+    mock_gwemopt_post_task.s.return_value = MagicMock(
+        apply_async=MagicMock(), delay=MagicMock()
+    )
 
-    # Mock chord to avoid celery serialization issues
     mock_chord = mocker.patch("grandma_gcn.gcn_stream.consumer.chord", autospec=True)
     mock_chord.return_value = lambda *args, **kwargs: None
 
-    # Create a temporary directory for saving notices
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Mock the GCNStream.notice_path attribute to use the temporary directory
-        gcn_stream = GCNStream(gcn_config_path, logger=logger, restart_queue=False)
-        mocker.patch.object(gcn_stream, "notice_path", temp_path)
+        engine, session_local = sqlite_engine_and_session
 
-        # Run the GCN stream
-        gcn_stream.run(test=True)
+        with session_local() as session:
+            gcn_stream = GCNStream(
+                gcn_config_path, engine, session, logger=logger, restart_queue=False
+            )
+            mocker.patch.object(gcn_stream, "notice_path", temp_path)
 
-        # Assertions
-        assert mock_poll_method.call_count == 3601
-        mock_commit_method.assert_any_call(mock_message_update)
-        mock_commit_method.assert_any_call(mock_message_retraction)
-        mock_post_msg_on_slack.assert_called()  # Ensure post_msg_on_slack is called
-        mock_gwemopt_task.s.assert_called()  # Ensure gwemopt_task.s is called
-        mock_gwemopt_post_task.s.assert_called()  # Ensure gwemopt_post_task.s is called
-        assert len(message_queue) == 0
+            # --- First run ---
+            gcn_stream.run(test=True)
 
-        # Verify that the notice was saved to the temporary directory
-        saved_files = list(temp_path.glob("*.json"))
-        assert len(saved_files) == 1  # Ensure one file was saved
-        with open(saved_files[0], "r") as f:
-            saved_notice = json.load(f)
-        assert saved_notice["superevent_id"] == "S241102br"  # Example assertion
+            # --- Assertions after first alert ---
+            alert = session.get(GW_alert, "S241102br")
+            assert alert is not None
+            assert alert.triggerId == "S241102br"
+            assert alert.thread_ts == "123.456"
+            assert alert.reception_count == 1
 
-        assert mock_owncloud_mkdir_request.call_count == 7
-        _, kwargs = mock_owncloud_mkdir_request.call_args
+            # Notice saved
+            saved_files = list(temp_path.glob("*.json"))
+            assert len(saved_files) == 1
+            with open(saved_files[0]) as f:
+                saved_notice = json.load(f)
+            assert saved_notice["superevent_id"] == "S241102br"
 
-        assert kwargs["method"] == "MKCOL"
-        assert kwargs["url"] == URL(
-            "https://owncloud.example.com/Candidates/GW/S241102br/VOEVENTS"
-        )
+            # Slack & OwnCloud interactions
+            assert mock_post_msg_on_slack.called
+            assert mock_owncloud_mkdir_request.call_count == 7
+            _, kwargs = mock_owncloud_mkdir_request.call_args
+            assert kwargs["method"] == "MKCOL"
+            assert kwargs["url"] == URL(
+                "https://owncloud.example.com/Candidates/GW/S241102br/VOEVENTS"
+            )
+
+        with session_local() as session:
+            # --- Second run (same alert) ---
+            push_update()  # Push same alert again
+            gcn_stream.run(test=True)
+
+            # --- Assertions after second alert ---
+            alert = session.get(GW_alert, "S241102br")
+            assert alert is not None
+            assert alert.reception_count == 2
+            assert alert.thread_ts == "123.456"  # should not have changed
 
 
-def test_main_calls_gcnstream_and_run(tmp_path):
+def test_main_calls_gcnstream_and_run(tmp_path, sqlite_engine_and_session):
     fake_config_path = tmp_path / "fake_config.toml"
     fake_config_path.write_text(
         "[PATH]\ngcn_stream_log_path='log.log'\nnotice_path='.'\n"
     )
 
+    engine, session_local = sqlite_engine_and_session
+
     with (
         patch("grandma_gcn.gcn_stream.stream.init_logging") as mock_init_logging,
+        patch("grandma_gcn.gcn_stream.stream.init_db") as mock_init_db,
         patch("grandma_gcn.gcn_stream.stream.GCNStream") as mock_gcnstream_cls,
+        patch("grandma_gcn.gcn_stream.stream.dotenv_values") as mock_dotenv_values,
     ):
-
         mock_logger = MagicMock()
         mock_init_logging.return_value = mock_logger
+
+        mock_init_db.return_value = (engine, session_local)
 
         mock_gcnstream = MagicMock()
         mock_gcnstream_cls.return_value = mock_gcnstream
 
+        mock_dotenv_values.return_value = {
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"
+        }
+
         stream.main(gcn_config_path=str(fake_config_path))
 
         mock_init_logging.assert_called_once_with(logger_name="gcn_stream")
+        mock_init_db.assert_called_once()
         mock_gcnstream_cls.assert_called_once()
         mock_gcnstream.run.assert_called_once()

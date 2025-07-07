@@ -1,26 +1,24 @@
-from pathlib import Path
+import logging
 import shutil
+from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
 from typing import Any
+
+from astropy.table import Table
+from astropy.time import Time
+from celery import current_task
 from fink_utils.slack_bot.bot import init_slackbot
 from yarl import URL
-from astropy.table import Table
 
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.slackbot.gw_message import (
+    build_gwemopt_message,
     build_gwemopt_results_message,
     new_alert_on_slack,
-    build_gwemopt_message,
     post_image_on_slack,
 )
 from grandma_gcn.worker.celery_app import celery
-import logging
-from celery import current_task
-
-from astropy.time import Time
-
 from grandma_gcn.worker.gwemopt_init import GalaxyCatalog, init_gwemopt
-from contextlib import redirect_stdout, redirect_stderr
-
 from grandma_gcn.worker.owncloud_client import OwncloudClient
 
 
@@ -233,41 +231,61 @@ def gwemopt_task(
     galaxy_catalog: str | None = None,
 ) -> None:
     """
-    Task to process the GCN notice.
+    Task to process a GCN (General Coordinates Network) notice and generate observation plans using the GWEMOPT package for the GRANDMA collaboration.
+
+    This Celery task orchestrates the full workflow for a gravitational wave alert: it parses the alert, generates observation plans (tilings) for a list of telescopes, pushes the results to an ownCloud instance, and posts updates to Slack. The process is highly configurable and adapts its behavior depending on the observation strategy (tiling type) selected.
+
+    Context and Workflow
+    --------------------
+    - The task is triggered when a new GCN notice is received. It is designed to be run asynchronously as part of a distributed system.
+    - The notice is parsed and a GW_alert object is created, which encapsulates the alert's metadata and skymap.
+    - The observation strategy (tiling type) determines the downstream processing:
+        * For standard tiling, the skymap is divided into tiles for each telescope, maximizing coverage.
+        * For galaxy-targeted tiling (GALAXYTARGETING), the process cross-matches the skymap with a galaxy catalog to prioritize tiles containing likely host galaxies. In this case, both a galaxy catalog path and a catalog object must be provided.
+    - The GWEMOPT package is used to generate the observation plan, which may include 2D or 3D tiling, galaxy targeting, and additional features such as observability and footprint plots.
+    - The results (plots, data files, and custom ASCII tables) are uploaded to an ownCloud instance for sharing with the collaboration.
+    - Slack notifications are sent at key steps: task start, plan generation, and result posting (including coverage maps and ASCII tables).
+    - After completion, a post-processing task can merge galaxy-targeted results and clean up temporary files.
 
     Parameters
     ----------
-    telescopes : listpath_log[str]
-        List of telescopes to use for the observation plan.
+    telescopes : list[str]
+        List of telescope names to use for the observation plan. Each telescope will receive a tailored tiling.
     nb_tiles : list[int]
-        Number of tiles for each telescope.
+        Number of tiles to generate for each telescope. Must match the length of `telescopes`.
     nside : int
-        The nside parameter for the skymap.
+        The HEALPix nside parameter for the skymap resolution.
     slack_channel : str
-        The Slack channel to send the notification to.
+        The Slack channel name where notifications and results will be posted.
     channel_id : str
-        The Slack channel ID to send the notification to.
-        Different from slack_channel, this is the ID used by the Slack API.
+        The Slack channel ID (used by the Slack API for posting images and threaded messages).
     owncloud_config : dict[str, Any]
-        Configuration dictionary for the ownCloud client, containing the username and password.
+        Configuration dictionary for the ownCloud client, containing credentials and connection info.
     owncloud_gwemopt_url : str
-        The URL for the ownCloud instance where the results will be stored.
+        The base URL for the ownCloud instance where results will be stored. Subfolders are created per event and strategy.
     path_notice : str
-        Path to the GCN notice file.
+        Path to the GCN notice file (JSON format) to be processed.
     path_output : str
-        Path to the output directory.
+        Path to the output directory where GWEMOPT products (plots, data files) will be written.
     path_log : str
-        Path to the log directory.
+        Path to the directory where log files for this task will be stored.
     threshold_config : dict[str, float | int]
-        Configuration dictionary for the thresholds to use in the gwemopt task.
+        Dictionary of thresholds (e.g., probability, area) to use in the GW_alert and GWEMOPT processing.
     obs_strategy : str
-        The observation strategy to use, as a string. It should be one of the values in `GW_alert.ObservationStrategy`.
-    alert_thread_ts : str | None
-        The thread timestamp for the alert message on Slack, if applicable.
-    path_galaxy_catalog : str
-        Path to the galaxy catalog directory.
-    galaxy_catalog : str
-        The galaxy catalog to use.
+        The observation strategy (tiling type) to use. Should be one of the values in `GW_alert.ObservationStrategy` (e.g., STANDARD, GALAXYTARGETING).
+    alert_thread_ts : str | None, optional
+        Slack thread timestamp for posting follow-up messages in a thread (if applicable).
+    path_galaxy_catalog : str | None, optional
+        Path to the galaxy catalog directory. Required for galaxy-targeted tiling.
+    galaxy_catalog : str | None, optional
+        The galaxy catalog to use (as a string identifier or object). Required for galaxy-targeted tiling.
+
+    Notes
+    -----
+    - The task is robust to missing or malformed input, and logs errors for debugging.
+    - The workflow is modular: each step (parsing, tiling, upload, notification) can be adapted or extended for new strategies or output formats.
+    - The output structure on ownCloud is organized by event and strategy, making it easy to find results for a given alert and tiling type.
+    - For galaxy-targeted tiling, a post-processing step merges all ASCII tables into a single file for the collaboration.
     """
 
     # Initialize the ownCloud client and URL
@@ -312,7 +330,7 @@ def gwemopt_task(
         )  # Configure a logger specific to this task
 
         logger, log_file_path = setup_task_logger(
-            "gwemopt_task_{}".format(gw_alert.event_id), Path(path_log), task_id
+            f"gwemopt_task_{gw_alert.event_id}", Path(path_log), task_id
         )
 
         with open(log_file_path, "a") as log_file:
@@ -423,6 +441,7 @@ def gwemopt_task(
                     logger.error(
                         f"Coverage map file not found: {e}. Skipping posting map on Slack."
                     )
+                    raise e
 
                 logger.info("Coverage map posted on slack in the message thread")
 
@@ -472,7 +491,7 @@ def merge_galaxy_file(
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"The path {path} does not exist.")
-        with open(path, "r") as f:
+        with open(path) as f:
             merge_results.append(f.read())
 
     all_ascii = "\n\n".join(merge_results)

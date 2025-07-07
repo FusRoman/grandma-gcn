@@ -1,19 +1,19 @@
-import tempfile
 import logging
+import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
+import pytest
+from astropy.table import Table
 from yarl import URL
+
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.gcn_stream.stream import load_gcn_config
-from grandma_gcn.worker.gwemopt_init import GalaxyCatalog, init_gwemopt
-import pytest
-from unittest.mock import patch, MagicMock
-from pathlib import Path
-
-from grandma_gcn.worker.gwemopt_worker import gwemopt_task
-from tests.conftest import open_notice_file
 from grandma_gcn.worker.celery_app import celery
+from grandma_gcn.worker.gwemopt_init import GalaxyCatalog, init_gwemopt
+from grandma_gcn.worker.gwemopt_worker import gwemopt_task
 from grandma_gcn.worker.owncloud_client import OwncloudClient
-from astropy.table import Table
+from tests.conftest import open_notice_file
 
 
 @pytest.fixture(autouse=True)
@@ -182,7 +182,6 @@ def test_gwemopt_task_celery(mocker, tmp_path, S241102_update):
         temp_path = Path(temp_dir)
         notice_path = S241102_update.save_notice(temp_path)
 
-        # Préparation des paramètres
         telescopes = ["TCH", "TRE"]
         nb_tiles = [10, 10]
         nside = 16
@@ -299,10 +298,6 @@ def test_process_alert_calls(mocker, tiles: dict[str, Table]):
                             }
 
                             mock_open.return_value.__enter__.return_value = MagicMock()
-
-                            tiles["KAO"] = None  # Simulate no data for KAO
-                            tiles["Colibri"] = None  # Simulate no data for Colibri
-                            tiles["UBAI-T60S"] = None  # Simulate no data for TCH
                             mock_obs_plan.return_value = (tiles, MagicMock())
 
                             # Patch OwncloudClient.mkdir to track calls

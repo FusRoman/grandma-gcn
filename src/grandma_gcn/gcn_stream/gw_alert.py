@@ -1,35 +1,34 @@
-from base64 import b64decode
-from enum import Enum
+import ast
 import io
 import json
 import logging
+import uuid
+from base64 import b64decode
+from enum import Enum
 from pathlib import Path
 from typing import Any, Self
-import uuid
 
-from astropy_healpix import (
-    nside_to_level,
-    uniq_to_level_ipix,
-    level_to_nside,
-    nside_to_pixel_area,
-)
-from astropy.time import Time
-
-from astropy.table import QTable, Table, unique
 import astropy.units as astro_units
+import healpy as hp
+from astropy.coordinates import SkyCoord
+from astropy.table import QTable, Table, unique
+from astropy.time import Time
+from astropy.units import deg as degree
+from astropy_healpix import (
+    level_to_nside,
+    nside_to_level,
+    nside_to_pixel_area,
+    uniq_to_level_ipix,
+)
+from gwemopt.ToO_manager import Observation_plan_multiple
 from ligo.skymap.bayestar import rasterize
 from numpy import array, cumsum, float64, inf, isinf, logical_not, mean, ndarray, pi
-
-from gwemopt.ToO_manager import Observation_plan_multiple
-import healpy as hp
-from astropy.units import deg as degree
-from astropy.coordinates import SkyCoord
 from spherical_geometry.polygon import SphericalPolygon
 
 
 def bytes_to_dict(notice: bytes) -> dict:
     """
-    Convert a bytes notice representing a dict into a python dictionnary
+    Convert a bytes notice representing a dict into a python dictionary
     Convert also the potential string value into real python literal.
 
     Parameters
@@ -66,7 +65,7 @@ class GW_alert:
         self.gw_dict = bytes_to_dict(notice)
         self.thresholds = thresholds
 
-        self.logger = logging.getLogger("gcn_stream.gw_alert_{}".format(self.event_id))
+        self.logger = logging.getLogger(f"gcn_stream.gw_alert_{self.event_id}")
 
     @property
     def BBH_proba(self) -> float | None:
@@ -377,7 +376,7 @@ class GW_alert:
         -------
         tuple[QTable, float64, float64, float64]
             - skymap_region: the portion of the skymap where the cumulative probability distribition
-                correpond to the credible level
+                correspond to the credible level
             - size_region: the size of the region, in square degree
             - mean_distance: the mean of the luminosity distance distribution within the sub region
             - mean_sigma_dist: the mean of the luminosity distance sigma within the sub region
@@ -418,8 +417,8 @@ class GW_alert:
         )
 
     class GRANDMA_Action(Enum):
-        GO_GRANDMA = "🚀 *GO GRANDMA*"
-        NO_GRANDMA = "❌ *NO GRANDMA*"
+        GO_GRANDMA = "🚀 *Should we GO GRANDMA ?*"
+        NO_GRANDMA = "❌ *PROBABLY NO GRANDMA ?*"
 
     def gw_score(self) -> tuple[int, str, GRANDMA_Action]:
         """
@@ -685,8 +684,6 @@ class GW_alert:
         unique_tiles = unique(tiles_table, keys="tile_id", keep="first")
         prob_covered = sum(unique_tiles["prob_sum"])
 
-        print("Total probability density in skymap:", sum(prob))
-
         integrated_proba_percentage = ((prob_covered / sum(prob)) * 100).value
 
         return integrated_proba_percentage
@@ -722,7 +719,7 @@ class GW_alert:
         unique_tiles = unique(tiles_table, keys="tile_id", keep="first")
 
         for row in unique_tiles:
-            corners = eval(row["Corners"])
+            corners = ast.literal_eval(row["Corners"])
             ra = [p[0] for p in corners]
             dec = [p[1] for p in corners]
 

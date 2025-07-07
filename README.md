@@ -34,7 +34,7 @@ Example: Load and process a GW alert
 
 ```python
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
-from grandma_gcn.slackbot.gw_message import build_gwalert_msg
+from grandma_gcn.slackbot.gw_message import build_gwalert_data_msg
 
 # Load a GW alert from a notice file
 with open("path/to/notice.json", "rb") as fp:
@@ -42,7 +42,7 @@ with open("path/to/notice.json", "rb") as fp:
 gw_alert = GW_alert(notice_bytes, BBH_threshold=0.5, Distance_threshold=500, ErrorRegion_threshold=100)
 
 # Build a Slack message
-msg = build_gwalert_msg(gw_alert)
+msg = build_gwalert_data_msg(gw_alert)
 ```
 
 ## Project Structure
@@ -54,135 +54,88 @@ msg = build_gwalert_msg(gw_alert)
 
 ## Docker & Docker Compose
 
-The project includes a `Dockerfile` and a `docker-compose.yml` for easy deployment and reproducible environments.
+The project provides two Docker Compose files: `compose_prod.yml` (for production) and `compose_test.yml` (for testing/E2E). These files allow you to deploy the application and its dependencies (PostgreSQL, Redis, Celery) in reproducible environments.
 
-- **Dockerfile**: Builds an image with all dependencies and the grandma-gcn codebase.
-- **docker-compose.yml**: Provides services for the main app, Redis (for Celery), and other dependencies. It is recommended for local development and testing.
+- **compose_prod.yml**: For production. Only mounts the necessary folders (`logs`, `catalogs`) and runs the main application (`gcn_stream`) with the production command.
+- **compose_test.yml**: For tests and CI/E2E. Mounts the entire project source code into the container (`../grandma-gcn:/home/${USR}/code/`) and installs the package in editable mode (`pip install -e`). The main service (`gcn_stream`) uses a dummy command (`tail -F anything`) to allow test injection.
+- Both files use an `init_volume` service to initialize permissions on shared volumes.
+- Environment variables are centralized in the `.env` file at the project root.
+- Docker volumes used:
+  - `e2e_volume`: shared volume for temporary files and logs.
+  - `pgdata` (test only): persistence for PostgreSQL data.
 
-To build and run the stack:
+### Environment Variables
 
-```bash
-docker compose build
-docker compose up
-```
-
-You can customize environment variables (e.g., Slack token, Redis host, OwnCloud credentials) in the `.env` file at the project root.
-
-### Example `.env` file
-
-The `.env` file is used to configure environment variables for Docker Compose and Celery. Here is an example of the required variables:
+The `.env` file must contain all required variables, including:
 
 ```env
 FINK_SLACK_TOKEN=your-slack-token-here
-
 USR=grandma_gcn
 USR_GROUP=grandma
 PROJECT_GID=1000
 PROJECT_UID=1000
-
 REDIS_HOST=redis
 REDIS_PORT=6379
 CELERY_BROKER_URL=redis://${REDIS_HOST}:${REDIS_PORT}/0
 CELERY_RESULT_BACKEND=redis://${REDIS_HOST}:${REDIS_PORT}/0
+POSTGRES_DB=grandma_db
+POSTGRES_USER=user
+POSTGRES_PASSWORD=pswd
+POSTGRES_ROOT_PASSWORD=root
+POSTGRES_PORT=1111
+POSTGRES_HOST=db
+SQLALCHEMY_DATABASE_URI=postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
 ```
 
-- `FINK_SLACK_TOKEN`: Slack bot token for posting messages.
-- `CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND`: URLs for the Redis instance used by Celery.
-- User and group variables are used for permissions inside the container.
+- The `POSTGRES_*` variables are required for PostgreSQL configuration.
+- Mount paths and permissions are managed via `USR`, `USR_GROUP`, `PROJECT_UID`, `PROJECT_GID`.
+
+### Running the stack
+
+For production:
+
+```bash
+docker compose -f compose_prod.yml build
+docker compose -f compose_prod.yml up
+```
+
+For tests/E2E:
+
+```bash
+docker compose -f compose_test.yml build
+docker compose -f compose_test.yml up
+```
+
+You can adjust environment variables in `.env` as needed.
 
 ## End-to-End (E2E) Testing
 
-An end-to-end test is provided in [`tests/test_e2e.py`](tests/test_e2e.py) to simulate the full workflow, including:
+End-to-end tests are provided to simulate the full workflow (Kafka, Celery, Slack, etc.).
 
-- Mocking Kafka GCN messages
-- Processing and saving GW notices
-- Verifying Celery post-processing tasks
+- Unit and integration tests are in the `tests/` directory.
+- There are two types of E2E tests:
+  - **Full E2E test** (`e2e`): Runs the complete processing pipeline, from GCN stream ingestion to Slack notification and observation plan generation. This test covers the integration of all main components and is the most comprehensive.
+  - **Lighter E2E test** (`e2e_light`): Runs a reduced version of the pipeline, focusing on the GCN stream and Slack message posting, without triggering the full observation plan generation. This is useful for quickly checking the alert ingestion and notification logic.
 
-### Required TOML configuration
+To run all tests:
 
-To run the E2E test, you need a TOML configuration file (for example, `gcn_stream_config.toml`) with the following required sections and secrets.
-
-```toml
-[CLIENT]
-id = "your-kafka-client-id"
-secret = "your-kafka-client-secret"
-
-[KAFKA_CONFIG]
-"group.id" = "test_e2e"
-"auto.offset.reset" = "earliest"
-"enable.auto.commit" = false
-
-[GCN_TOPICS]
-topics = ["igwn.gwalert"]
-
-[PATH]
-gcn_stream_log_path = "gcn_stream_e2e.log"
-notice_path = "notices"
-celery_task_log_path = "gwemopt_task"
-
-[THRESHOLD]
-BBH_proba = 0.5        # between 0 and 1
-Distance_cut = 5000    # in Mpc
-BNS_NSBH_size_cut = 5000 # in deg²
-BBH_size_cut = 5000 # in deg²
-
-[Slack]
-gw_alert_channel = "#your_slack_channel"
-gw_alert_channel_id = "your_slack_channel_id"
-
-[GWEMOPT]
-# You can specify several independent GWEMOPT tasks by providing lists of lists.
-# Each sublist corresponds to a separate GWEMOPT task (e.g., for different telescope groups or strategies).
-telescopes = [["TCH", "TRE"], ["TCA", "FZU-CTA-N"], ["FZU-Auger", "UBAI-T60S"], ["KAO", "Colibri"]]
-number_of_tiles = [[10, 10], [10, 15], [15, 10], [10, 10]]
-observation_strategy = ["Tiling", "Tiling", "Galaxy targeting", "Galaxy targeting"]
-nside_flat = 512
-path_galaxy_catalog = "catalogs/"
-galaxy_catalog = "mangrove"
-
-[OWNCLOUD]
-username = "your_owncloud_username"
-password = "your_owncloud_password"
-base_url = "https://your-owncloud-instance/remote.php/dav/files/your_owncloud_username/"
+```bash
+pytest
 ```
 
-**Required secrets and credentials:**
-- Kafka client `id` and `secret` for GCN stream access.
-- Slack bot token (`FINK_SLACK_TOKEN` in `.env`), channel name, and channel ID.
-- OwnCloud username, password, and WebDAV base URL.
-
-#### Notes on GWEMOPT configuration
-
-- The `[GWEMOPT]` section supports launching multiple independent GWEMOPT tasks in parallel.
-- Each entry in `telescopes`, `number_of_tiles`, and `observation_strategy` must be a list of the same length, where each sublist or value defines the configuration for one GWEMOPT task.
-- For example, the first GWEMOPT task will use telescopes `["TCH", "TRE"]` with `[10, 10]` tiles and `"Tiling"` strategy, the second task will use `["TCA", "FZU-CTA-N"]` with `[10, 15]` tiles and `"Tiling"` strategy, etc.
-
-#### Notes on thresholds and GW_alert usage
-
-- The `[THRESHOLD]` section replaces the old `[Threshold]` and now uses explicit keys: `BBH_proba`, `Distance_cut`, `BNS_NSBH_size_cut`, `BBH_size_cut`.
-- When creating a `GW_alert` object, you should now pass the thresholds as a dictionary, for example:
-
-```python
-gw_alert = GW_alert(
-    notice_bytes,
-    thresholds={
-        "BBH_proba": 0.5,
-        "Distance_cut": 500,
-        "BNS_NSBH_size_cut": 100,
-        "BBH_size_cut": 100,
-    }
-)
-```
-
-### Running the E2E test
-
-Once your `.env` and TOML config files are set up, run:
+To run only the full E2E test:
 
 ```bash
 pytest -m e2e
 ```
 
-This will execute the end-to-end workflow, including message ingestion, processing, and post-processing via Celery.
+To run only the lighter E2E test:
+
+```bash
+pytest -m e2e_light
+```
+
+> **Note:** Make sure your TOML config files and `.env` are properly set up before running E2E tests. Some tests may require specific configuration or data files (see comments at the top of each test file for details).
 
 ## Testing
 
@@ -196,6 +149,140 @@ pytest
 
 - GW stream and OwnCloud credentials are configured via TOML files and environment variables.
 - See example configuration files in the `tests/` directory.
+
+## Database & Alembic Migrations
+
+### Database
+
+The project uses a **PostgreSQL** database managed with **SQLAlchemy**.
+
+Currently, the main table is:
+
+- `gw_alerts`: stores metadata about gravitational wave alerts, including:
+  - `triggerId`: unique event ID
+  - `thread_ts`: Slack thread timestamp
+  - `reception_count`: number of times the alert was received
+
+Database connections are initialized via the `init_db()` function:
+
+```python
+from grandma_gcn.database.db_utils import init_db
+
+engine, SessionLocal = init_db(
+    database_url="postgresql+psycopg://user:password@localhost:5432/grandma_db",
+    echo=True
+)
+```
+
+Then used like:
+
+```python
+from grandma_gcn.database.gw_db import GW_alert
+
+with SessionLocal() as session:
+    alerts = session.query(GW_alert).all()
+```
+
+You can inspect or modify alerts directly in PostgreSQL with:
+
+```sql
+-- List all alerts
+SELECT * FROM gw_alerts;
+
+-- Delete a specific alert
+DELETE FROM gw_alerts WHERE "triggerId" = 'S241102br';
+```
+
+### 🛠 Alembic Migrations
+
+**Alembic** is used to manage database schema migrations. Migration scripts live in:
+
+```
+src/alembic_migration/versions/
+```
+
+#### 📚 Creating a Migration
+
+After modifying your SQLAlchemy models, generate a migration with:
+
+```bash
+alembic revision --autogenerate -m "your message here"
+```
+
+This creates a new file in `versions/`. Review and edit it before applying.
+
+#### 🚀 Applying Migrations
+
+To apply all pending migrations:
+
+```bash
+alembic upgrade head
+```
+
+To apply a specific migration:
+
+```bash
+alembic upgrade <revision_id>
+```
+
+#### ⬅️ Rolling Back
+
+To undo the latest migration:
+
+```bash
+alembic downgrade -1
+```
+
+Or to a specific revision:
+
+```bash
+alembic downgrade <revision_id>
+```
+
+#### ⚙️ Alembic Setup
+
+If not already configured, generate an Alembic environment with:
+
+```bash
+alembic init src/alembic_migration
+```
+
+Then in `alembic.ini`, set:
+
+```
+script_location = src/alembic_migration
+```
+
+And in `env.py`, update your target metadata and engine import:
+
+```python
+from grandma_gcn.database.db_base import Base
+target_metadata = Base.metadata
+```
+
+You can also import your models to ensure they are registered.
+
+#### 🧪 Troubleshooting
+
+If Alembic fails with errors like:
+
+```
+sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedTable) relation "gw_alerts" does not exist
+```
+
+This likely means:
+- The initial migration was not applied.
+- The table was dropped or the DB was reset.
+
+Fix it with:
+
+```bash
+alembic upgrade head
+```
+
+Or recreate from scratch if needed.
+
+---
 
 ## Alert Processing Pipeline
 

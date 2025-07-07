@@ -1,11 +1,9 @@
 import pytest
+from astropy.table import Table
+from astropy.time import Time
+from numpy import inf, isinf, logical_not, mean
 
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
-
-from astropy.time import Time
-from numpy import inf, logical_not, isinf, mean
-
-from astropy.table import Table
 
 
 def test_gw_alert_unsignificant(gw_alert_unsignificant: GW_alert):
