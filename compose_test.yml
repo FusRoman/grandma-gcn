@@ -31,6 +31,7 @@ services:
     depends_on:
       - celery_worker
       - init_volume
+      - db
     command: tail -F anything
 
   redis:
