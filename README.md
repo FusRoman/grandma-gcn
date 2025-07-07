@@ -150,6 +150,140 @@ pytest
 - GW stream and OwnCloud credentials are configured via TOML files and environment variables.
 - See example configuration files in the `tests/` directory.
 
+## Database & Alembic Migrations
+
+### Database
+
+The project uses a **PostgreSQL** database managed with **SQLAlchemy**.
+
+Currently, the main table is:
+
+- `gw_alerts`: stores metadata about gravitational wave alerts, including:
+  - `triggerId`: unique event ID
+  - `thread_ts`: Slack thread timestamp
+  - `reception_count`: number of times the alert was received
+
+Database connections are initialized via the `init_db()` function:
+
+```python
+from grandma_gcn.database.db_utils import init_db
+
+engine, SessionLocal = init_db(
+    database_url="postgresql+psycopg://user:password@localhost:5432/grandma_db",
+    echo=True
+)
+```
+
+Then used like:
+
+```python
+from grandma_gcn.database.gw_db import GW_alert
+
+with SessionLocal() as session:
+    alerts = session.query(GW_alert).all()
+```
+
+You can inspect or modify alerts directly in PostgreSQL with:
+
+```sql
+-- List all alerts
+SELECT * FROM gw_alerts;
+
+-- Delete a specific alert
+DELETE FROM gw_alerts WHERE "triggerId" = 'S241102br';
+```
+
+### 🛠 Alembic Migrations
+
+**Alembic** is used to manage database schema migrations. Migration scripts live in:
+
+```
+src/alembic_migration/versions/
+```
+
+#### 📚 Creating a Migration
+
+After modifying your SQLAlchemy models, generate a migration with:
+
+```bash
+alembic revision --autogenerate -m "your message here"
+```
+
+This creates a new file in `versions/`. Review and edit it before applying.
+
+#### 🚀 Applying Migrations
+
+To apply all pending migrations:
+
+```bash
+alembic upgrade head
+```
+
+To apply a specific migration:
+
+```bash
+alembic upgrade <revision_id>
+```
+
+#### ⬅️ Rolling Back
+
+To undo the latest migration:
+
+```bash
+alembic downgrade -1
+```
+
+Or to a specific revision:
+
+```bash
+alembic downgrade <revision_id>
+```
+
+#### ⚙️ Alembic Setup
+
+If not already configured, generate an Alembic environment with:
+
+```bash
+alembic init src/alembic_migration
+```
+
+Then in `alembic.ini`, set:
+
+```
+script_location = src/alembic_migration
+```
+
+And in `env.py`, update your target metadata and engine import:
+
+```python
+from grandma_gcn.database.db_base import Base
+target_metadata = Base.metadata
+```
+
+You can also import your models to ensure they are registered.
+
+#### 🧪 Troubleshooting
+
+If Alembic fails with errors like:
+
+```
+sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedTable) relation "gw_alerts" does not exist
+```
+
+This likely means:
+- The initial migration was not applied.
+- The table was dropped or the DB was reset.
+
+Fix it with:
+
+```bash
+alembic upgrade head
+```
+
+Or recreate from scratch if needed.
+
+---
+
 ## Alert Processing Pipeline
 
 The grandma-gcn package implements a modular and automated pipeline for handling gravitational wave (GW) alerts from ingestion to dissemination. Here is a detailed overview of the main steps:
