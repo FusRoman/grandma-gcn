@@ -49,6 +49,9 @@ repos:
     hooks:
       - id: codespell
         args: ["--ignore-words=.codespellignore.txt"]
+        exclude: |
+          ^tests/notice_examples/.*\.json$
+          ^pdm\.lock$
 
   - repo: local
     hooks:
