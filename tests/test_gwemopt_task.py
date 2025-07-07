@@ -182,7 +182,7 @@ def test_gwemopt_task_celery(mocker, tmp_path, S241102_update):
         temp_path = Path(temp_dir)
         notice_path = S241102_update.save_notice(temp_path)
 
-        telescopes = ["TCH", "TRE"]  # codespell-ignore
+        telescopes = ["TCH", "TRE"]
         nb_tiles = [10, 10]
         nside = 16
         path_output = tmp_path / "output"
