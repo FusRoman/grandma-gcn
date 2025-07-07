@@ -1,30 +1,28 @@
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+
+from astropy.table import Table
+from astropy.time import Time
 from fink_utils.slack_bot.msg_builder import Message
+from fink_utils.slack_bot.rich_text.rich_section import SectionElement
+from fink_utils.slack_bot.rich_text.rich_text_element import RichTextStyle
+from slack_sdk import WebClient
+from slack_sdk.errors import SlackApiError
+from slack_sdk.web.slack_response import SlackResponse
 
 from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
-
 from grandma_gcn.slackbot.element_extension import (
+    Action,
     BaseSection,
     MarkdownText,
-    Text,
-    RichTextElement,
-    URLButton,
-    Action,
     PlainText,
+    RichTextElement,
+    Text,
+    URLButton,
 )
-
-from fink_utils.slack_bot.rich_text.rich_text_element import RichTextStyle
-from fink_utils.slack_bot.rich_text.rich_section import SectionElement
-
-from astropy.time import Time
-
-from slack_sdk import WebClient
-from astropy.table import Table
-from slack_sdk.errors import SlackApiError
-from slack_sdk.web.slack_response import SlackResponse
 
 
 def get_grandma_owncloud_public_url() -> str:
@@ -84,7 +82,7 @@ def build_gwalert_notification_msg(gw_alert: GW_alert) -> Message:
     )
 
     msg = Message()
-    msg.add_header("🔔 New GW alert received: {}".format(gw_alert.event_id))
+    msg.add_header(f"🔔 New GW alert received: {gw_alert.event_id}")
     msg.add_divider()
     msg.add_elements(
         BaseSection().add_text(
@@ -113,6 +111,7 @@ def build_gwalert_data_msg(
         The path to the alert folder on OwnCloud.
     nb_alert_received : int
         The number of alerts received so far.
+
     Returns
     -------
     Message
@@ -158,7 +157,7 @@ def build_gwalert_data_msg(
         )
         .add_elements(
             MarkdownText(
-                "*Prefered class:*\n{}({:.0f} %) {}".format(
+                "*Preferred class:*\n{}({:.0f} %) {}".format(
                     class_event.value,
                     gw_alert.class_proba(class_event) * 100,
                     class_event.to_emoji(),
@@ -166,7 +165,7 @@ def build_gwalert_data_msg(
             ),
         )
         .add_elements(
-            MarkdownText("*Other classes:*\n{}".format(other_class_msg)),
+            MarkdownText(f"*Other classes:*\n{other_class_msg}"),
         )
         .add_elements(
             MarkdownText(
@@ -190,9 +189,9 @@ def build_gwalert_data_msg(
             ),
         )
         .add_elements(
-            MarkdownText("*GRANDMA Score:* {}".format(score)),
+            MarkdownText(f"*GRANDMA Score:* {score}"),
         )
-        .add_elements(MarkdownText("*Decision time:* {}".format(action.value))),
+        .add_elements(MarkdownText(f"*Decision time:* {action.value}")),
     )
 
     msg.add_elements(
@@ -206,13 +205,13 @@ def build_gwalert_data_msg(
     )
 
     skyportal_button = URLButton(
-        "SkyPortal - {}".format(gw_alert.event_id),
-        "https://skyportal-icare.ijclab.in2p3.fr/source/{}".format(gw_alert.event_id),
+        f"SkyPortal - {gw_alert.event_id}",
+        f"https://skyportal-icare.ijclab.in2p3.fr/source/{gw_alert.event_id}",
         emoji=True,
     )
 
     grace_db_button = URLButton(
-        "GraceDB - {}".format(gw_alert.event_id),
+        f"GraceDB - {gw_alert.event_id}",
         gw_alert.gracedb_url,
         emoji=True,
     )
@@ -221,7 +220,7 @@ def build_gwalert_data_msg(
     url_owncloud_event = get_grandma_owncloud_public_url() + path_gw_alert
 
     owncloud_repo_button = URLButton(
-        "OwnCloud - {}".format(gw_alert.event_id),
+        f"OwnCloud - {gw_alert.event_id}",
         str(url_owncloud_event),
         emoji=True,
     )
@@ -295,15 +294,15 @@ def build_gwemopt_message(
     gw_alert.logger.info("Building message for new GWEMOPT processing task")
 
     msg = Message()
-    msg.add_header("🧠 New GWEMOPT processing for {}".format(gw_alert.event_id))
+    msg.add_header(f"🧠 New GWEMOPT processing for {gw_alert.event_id}")
     msg.add_divider()
     msg.add_elements(
         BaseSection()
         .add_elements(
-            MarkdownText("🆔 *Task ID:*\n{}".format(celery_task_id)),
+            MarkdownText(f"🆔 *Task ID:*\n{celery_task_id}"),
         )
         .add_elements(
-            MarkdownText("⏱️ Task started at: {}".format(task_start_time.iso)),
+            MarkdownText(f"⏱️ Task started at: {task_start_time.iso}"),
         )
         .add_elements(
             MarkdownText(
@@ -410,16 +409,16 @@ def build_gwemopt_results_message(
         The message object containing the results of the GWEMOPT processing.
     """
     msg = Message()
-    msg.add_header("🗺️ GWEMOPT processing finished for {}".format(gw_alert.event_id))
+    msg.add_header(f"🗺️ GWEMOPT processing finished for {gw_alert.event_id}")
     msg.add_divider()
 
     msg.add_elements(
         BaseSection()
         .add_elements(
-            MarkdownText("*Task ID:*\n{}".format(celery_task_id)),
+            MarkdownText(f"*Task ID:*\n{celery_task_id}"),
         )
         .add_elements(
-            MarkdownText("Total execution time: {:.3f}".format(execution_time)),
+            MarkdownText(f"Total execution time: {execution_time:.3f}"),
         )
         .add_elements(
             MarkdownText(
@@ -443,7 +442,7 @@ def build_gwemopt_results_message(
     # Public URL (meaning not the WebDAV url used to make the requests) for the OwnCloud event folder
     url_owncloud_gwemopt_results = get_grandma_owncloud_public_url() + path_gw_alert
     owncloud_repo_button = URLButton(
-        "OwnCloud - {}".format(gw_alert.event_id),
+        f"OwnCloud - {gw_alert.event_id}",
         str(url_owncloud_gwemopt_results),
         emoji=True,
     )
@@ -500,7 +499,7 @@ def post_msg_on_slack(
             )
 
             if verbose:
-                logger.debug("Post msg on slack successfull")
+                logger.debug("Post msg on slack successful")
 
             return slack_message_response
     except SlackApiError as e:
@@ -574,6 +573,6 @@ def new_alert_on_slack(
         verbose=False,
     )
 
-    logger.info("Alert sent to Slack channel: {}".format(channel))
+    logger.info(f"Alert sent to Slack channel: {channel}")
 
     return response

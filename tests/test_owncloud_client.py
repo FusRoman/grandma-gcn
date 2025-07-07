@@ -1,7 +1,9 @@
 from pathlib import Path
-import pytest
 from unittest import mock
+
+import pytest
 from yarl import URL
+
 from grandma_gcn.worker.owncloud_client import OwncloudClient
 
 

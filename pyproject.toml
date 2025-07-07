@@ -43,6 +43,11 @@ lint = ["black>=24.10.0", "pre-commit>=4.0.1", "pylint>=3.3.2"]
 [tool.black]
 target-version = ['py312']
 include = '\.pyi?$'
+line-length = 88
+
+[tool.isort]
+profile = "black"
+line_length = 88
 
 [tool.pylint]
 disable = "all"

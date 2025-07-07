@@ -1,6 +1,8 @@
 from unittest.mock import MagicMock
+
 import pytest
 from sqlalchemy import text
+
 from grandma_gcn.database.gw_db import GW_alert
 from grandma_gcn.database.init_db import init_db
 

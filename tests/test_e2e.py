@@ -13,18 +13,18 @@ This allows E2E tests to run in a real or controlled integration environment wit
         def test_my_integration(): ...
 """
 
+import json
+import time
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+from astropy.table import Table
 from dotenv import dotenv_values
 from numpy.random import random
-import json
-from pathlib import Path
 from pytest import mark
-from unittest.mock import patch, MagicMock
-from astropy.table import Table
 
 from grandma_gcn.database.init_db import init_db
 from tests.conftest import open_notice_file
-
-import time
 
 
 def push_message_for_test(mocker, message_queue: list, topic: str, notice_file: str):
@@ -131,7 +131,7 @@ def test_e2e_grandma(mocker, logger):
         saved_files = list(shared_path.glob("*.json"))
         saved_files.sort()
         assert len(saved_files) == 2
-        with open(saved_files[0], "r") as f:
+        with open(saved_files[0]) as f:
             saved_notice = json.load(f)
         assert saved_notice["superevent_id"] == "S241102br"  # Example assertion
 
@@ -147,10 +147,10 @@ def test_e2e_grandma_light(mocker, logger, tiles: dict[str, Table]):
     This test is faster than the test_e2e_grandma as it mocks the GWEMOPT process.
     """
     from grandma_gcn.gcn_stream.stream import GCNStream
-    from grandma_gcn.worker.celery_app import celery
     from grandma_gcn.slackbot.gw_message import (
         post_image_on_slack as real_post_image_on_slack,
     )
+    from grandma_gcn.worker.celery_app import celery
 
     celery.conf.update(task_always_eager=True)
 
@@ -282,6 +282,6 @@ def test_e2e_grandma_light(mocker, logger, tiles: dict[str, Table]):
         saved_files = list(shared_path.glob("*.json"))
         saved_files.sort()
         assert len(saved_files) == 2
-        with open(saved_files[0], "r") as f:
+        with open(saved_files[0]) as f:
             saved_notice = json.load(f)
         assert saved_notice["superevent_id"] == "S241102br"  # Example assertion

@@ -1,20 +1,18 @@
-from pathlib import Path
 import pickle
+from pathlib import Path
 
 import pytest
-
-from grandma_gcn.gcn_stream.gcn_logging import init_logging
-from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from astropy.table import Table
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
 from grandma_gcn.database.base import Base
+from grandma_gcn.gcn_stream.gcn_logging import init_logging
+from grandma_gcn.gcn_stream.gw_alert import GW_alert
 
 
 @pytest.fixture
 def sqlite_engine_and_session():
-    # Création d'un moteur SQLite en mémoire
     engine = create_engine("sqlite:///:memory:", echo=False, future=True)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
@@ -122,8 +120,8 @@ def owncloud_client(gcn_config_path, logger):
     """
     Fixture to create an instance of OwncloudClient
     """
-    from grandma_gcn.worker.owncloud_client import OwncloudClient
     from grandma_gcn.gcn_stream.stream import load_gcn_config
+    from grandma_gcn.worker.owncloud_client import OwncloudClient
 
     config = load_gcn_config(gcn_config_path, logger=logger)
     return OwncloudClient(config.get("OWNCLOUD"))

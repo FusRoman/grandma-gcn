@@ -1,16 +1,14 @@
 import json
-from pathlib import Path
 import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import MagicMock, patch
-from grandma_gcn.gcn_stream import stream
-
 from yarl import URL
 
+from grandma_gcn.gcn_stream import stream
 from grandma_gcn.gcn_stream.consumer import Consumer
 from grandma_gcn.gcn_stream.gcn_logging import init_logging
-
 from tests.test_e2e import push_message_for_test
 
 
@@ -178,8 +176,8 @@ def test_gcn_stream_with_real_notice(
     """
     Test the run method of the GCN stream with a real notice and database persistence
     """
-    from grandma_gcn.gcn_stream.stream import GCNStream
     from grandma_gcn.database.gw_db import GW_alert
+    from grandma_gcn.gcn_stream.stream import GCNStream
 
     # Simulate a message queue
     message_queue = []
@@ -257,7 +255,7 @@ def test_gcn_stream_with_real_notice(
             # Notice saved
             saved_files = list(temp_path.glob("*.json"))
             assert len(saved_files) == 1
-            with open(saved_files[0], "r") as f:
+            with open(saved_files[0]) as f:
                 saved_notice = json.load(f)
             assert saved_notice["superevent_id"] == "S241102br"
 

@@ -1,9 +1,10 @@
 import logging
 from pathlib import Path
 from typing import Any
-from yarl import URL
+
 import requests
 from requests.auth import HTTPBasicAuth
+from yarl import URL
 
 
 class OwncloudClient:
@@ -90,6 +91,7 @@ class OwncloudClient:
             url_file,
             data=data,
             auth=HTTPBasicAuth(self.username, self.password),
+            timeout=5,
         )
         if response.status_code not in (201, 204):
             self.logger.error(

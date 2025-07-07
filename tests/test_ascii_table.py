@@ -1,8 +1,10 @@
+import math
+
 import pytest
 from astropy.table import Table
 from astropy.time import Time
+
 from grandma_gcn.worker.gwemopt_worker import table_to_custom_ascii
-import math
 
 
 def make_table(rows):

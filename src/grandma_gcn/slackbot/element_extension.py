@@ -1,7 +1,6 @@
-from typing import List, Self, Union
-from fink_utils.slack_bot.rich_text.rich_text_element import (
-    RichTextStyle,
-)
+from typing import Self
+
+from fink_utils.slack_bot.rich_text.rich_text_element import RichTextStyle
 
 
 class RichTextElement:
@@ -12,7 +11,7 @@ class RichTextElement:
         super().__init__()
         self.element = {"type": "rich_text", "elements": []}
 
-    def add_elements(self, elements: Union[Self, List[Self]]) -> Self:
+    def add_elements(self, elements: Self | list[Self]) -> Self:
         if type(elements) is list:
             self.element["elements"] += [el.get_element() for el in elements]
         else:
@@ -86,9 +85,7 @@ class BaseSection:
         super().__init__()
         self.section = {"type": "section"}
 
-    def add_elements(
-        self, elements: Union[RichTextElement, List[RichTextElement]]
-    ) -> Self:
+    def add_elements(self, elements: RichTextElement | list[RichTextElement]) -> Self:
         if "fields" not in self.section:
             self.section["fields"] = []
 
@@ -199,7 +196,7 @@ class Action:
         super().__init__()
         self.action = {"type": "actions", "elements": []}
 
-    def add_elements(self, elements: Union[URLButton, List[URLButton]]) -> Self:
+    def add_elements(self, elements: URLButton | list[URLButton]) -> Self:
         if type(elements) is list:
             self.action["elements"] += [el.get_element() for el in elements]
         else:

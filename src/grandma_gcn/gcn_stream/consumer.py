@@ -1,12 +1,12 @@
-from celery import chord
-from gcn_kafka import Consumer as KafkaConsumer
 import uuid
 
+from celery import chord
+from gcn_kafka import Consumer as KafkaConsumer
 from yarl import URL
 
+from grandma_gcn.database.gw_db import GW_alert as GW_alert_DB
 from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
-from grandma_gcn.database.gw_db import GW_alert as GW_alert_DB
 from grandma_gcn.slackbot.gw_message import (
     build_gwalert_data_msg,
     build_gwalert_notification_msg,
@@ -75,7 +75,7 @@ class Consumer(KafkaConsumer):
         -------
         tuple[str, URL]: The path to the alert folder on ownCloud and the URL of the alert folder.
         """
-        path_gw_alert = "Candidates/GW/{}".format(gw_alert.event_id)
+        path_gw_alert = f"Candidates/GW/{gw_alert.event_id}"
         # create a new folder on ownCloud for this alert
         path_owncloud_gw = self.owncloud_client.mkdir(path_gw_alert)
 
@@ -183,6 +183,11 @@ class Consumer(KafkaConsumer):
         1. Checks if the alert already exists in the database.
         2. If it does not exist, creates a new entry in the database and sets the thread timestamp.
         3. If it exists, increments the reception count.
+
+        Parameters
+        ----------
+        gw_alert : GW_alert
+            The significant GW alert object containing event information and thresholds.
 
         Returns
         -------

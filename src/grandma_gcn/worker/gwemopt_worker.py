@@ -1,26 +1,24 @@
-from pathlib import Path
+import logging
 import shutil
+from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
 from typing import Any
+
+from astropy.table import Table
+from astropy.time import Time
+from celery import current_task
 from fink_utils.slack_bot.bot import init_slackbot
 from yarl import URL
-from astropy.table import Table
 
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.slackbot.gw_message import (
+    build_gwemopt_message,
     build_gwemopt_results_message,
     new_alert_on_slack,
-    build_gwemopt_message,
     post_image_on_slack,
 )
 from grandma_gcn.worker.celery_app import celery
-import logging
-from celery import current_task
-
-from astropy.time import Time
-
 from grandma_gcn.worker.gwemopt_init import GalaxyCatalog, init_gwemopt
-from contextlib import redirect_stdout, redirect_stderr
-
 from grandma_gcn.worker.owncloud_client import OwncloudClient
 
 
@@ -332,7 +330,7 @@ def gwemopt_task(
         )  # Configure a logger specific to this task
 
         logger, log_file_path = setup_task_logger(
-            "gwemopt_task_{}".format(gw_alert.event_id), Path(path_log), task_id
+            f"gwemopt_task_{gw_alert.event_id}", Path(path_log), task_id
         )
 
         with open(log_file_path, "a") as log_file:
@@ -493,7 +491,7 @@ def merge_galaxy_file(
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"The path {path} does not exist.")
-        with open(path, "r") as f:
+        with open(path) as f:
             merge_results.append(f.read())
 
     all_ascii = "\n\n".join(merge_results)

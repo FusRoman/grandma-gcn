@@ -2,10 +2,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Self
 
-from numpy import ndarray
-
 from gwemopt.utils import read_skymap
 from healpy import reorder
+from numpy import ndarray
 
 
 class GalaxyCatalog(Enum):

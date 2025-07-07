@@ -1,15 +1,15 @@
 from pathlib import Path
 from typing import Any
 
+import tomli
+from dotenv import dotenv_values
+from fink_utils.slack_bot.bot import init_slackbot
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from grandma_gcn.gcn_stream.consumer import Consumer
-import tomli
-from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine, init_logging
-from fink_utils.slack_bot.bot import init_slackbot
 from grandma_gcn.database.init_db import init_db
-from dotenv import dotenv_values
+from grandma_gcn.gcn_stream.consumer import Consumer
+from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine, init_logging
 
 
 class GCNStream:
