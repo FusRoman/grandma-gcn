@@ -1,4 +1,6 @@
+from sqlalchemy import text
 from grandma_gcn.database.gw_db import GW_alert
+from grandma_gcn.database.init_db import init_db
 
 
 def test_insert_first_alert(sqlite_engine_and_session):
@@ -80,3 +82,18 @@ def test_increment_reception_count_instance_method(sqlite_engine_and_session):
 
         alert.increment_reception_count(session)
         assert alert.reception_count == 2
+
+
+def test_init_db_with_sqlite_memory(logger):
+    database_url = "sqlite:///:memory:"
+    engine, SessionLocal = init_db(database_url, logger=logger, echo=True)
+
+    # Vérifie que l'engine fonctionne
+    assert engine is not None
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT 1"))
+        assert result.scalar() == 1
+
+    # Vérifie que la session fonctionne
+    with SessionLocal() as session:
+        assert session is not None
