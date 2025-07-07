@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+import pytest
 from sqlalchemy import text
 from grandma_gcn.database.gw_db import GW_alert
 from grandma_gcn.database.init_db import init_db
@@ -97,3 +99,11 @@ def test_init_db_with_sqlite_memory(logger):
     # Vérifie que la session fonctionne
     with SessionLocal() as session:
         assert session is not None
+
+
+def test_init_db_raises_with_bad_url():
+    with pytest.raises(Exception):
+        init_db(
+            "postgresql://invalid:invalid@localhost:9999/doesnotexist",
+            logger=MagicMock(),
+        )
