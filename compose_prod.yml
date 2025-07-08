@@ -35,6 +35,7 @@ services:
       - ./logs:/app/logs
       - e2e_volume:/shared-tmp
       - ./catalogs:/home/${USR}/code/catalogs
+      - ./.env:/home/${USR}/code/.env
     depends_on:
       - celery_worker
       - init_volume
@@ -56,6 +57,7 @@ services:
       - ./logs:/app/logs
       - e2e_volume:/shared-tmp
       - ./catalogs:/home/${USR}/code/catalogs
+      - ./.env:/home/${USR}/code/.env
     command:
       [
         "python",

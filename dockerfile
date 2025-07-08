@@ -26,6 +26,7 @@ COPY --chown=$USR:$USR_GROUP ./README.md .
 COPY --chown=$USR:$USR_GROUP ./src ./src
 COPY --chown=$USR:$USR_GROUP ./tests ./tests
 COPY --chown=$USR:$USR_GROUP gcn_stream_config.toml .
+COPY --chown=$USR:$USR_GROUP alembic.ini .
 
 # Switch to the user
 USER $USR
