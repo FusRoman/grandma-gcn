@@ -32,7 +32,7 @@ services:
       - celery_worker
       - init_volume
       - db
-    command: "python -m alembic upgrade head && tail -F anything"
+    command: "tail -F anything"
 
   redis:
     image: redis:6.0.5

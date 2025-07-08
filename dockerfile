@@ -34,3 +34,6 @@ RUN pdm build
 
 RUN WHEEL_FILE=$(ls dist/*.whl) \
  && pip install --no-cache-dir $WHEEL_FILE
+
+COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

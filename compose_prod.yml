@@ -39,15 +39,7 @@ services:
       - celery_worker
       - init_volume
       - db
-    command:
-      [
-        "python -m alembic upgrade head",
-        "&&",
-        "python",
-        "src/grandma_gcn/gcn_stream/stream.py",
-        "--gcn-config-path",
-        "gcn_stream_config.toml",
-      ]
+    command: "python src/grandma_gcn/gcn_stream/stream.py --gcn-config-path gcn_stream_config.toml"
 
   redis:
     image: redis:6.0.5
