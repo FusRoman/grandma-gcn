@@ -171,9 +171,6 @@ class Consumer(KafkaConsumer):
                 return
 
         else:
-            self.logger.info(
-                f"Alert {gw_alert.event_id} is not significant, skipping processing."
-            )
             return
 
     def _handle_significant_alert(self, gw_alert: GW_alert) -> tuple[str, str]:
