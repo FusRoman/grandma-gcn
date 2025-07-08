@@ -17,7 +17,7 @@ def test_gw_alert_unsignificant(gw_alert_unsignificant: GW_alert):
     assert not gw_alert_unsignificant.is_significant
 
     assert gw_alert_unsignificant.event_class == GW_alert.CBC_proba.Terrestrial
-    assert not gw_alert_unsignificant.is_real_observation()
+    assert not gw_alert_unsignificant.is_real_observation
     assert list(gw_alert_unsignificant.get_skymap().columns) == ["UNIQ", "PROBDENSITY"]
 
     _, size, mean_dist, mean_sigma = gw_alert_unsignificant.get_error_region(0.9)
@@ -42,7 +42,7 @@ def test_gw_alert_significant(gw_alert_significant: GW_alert):
     assert gw_alert_significant.is_significant
 
     assert gw_alert_significant.event_class == GW_alert.CBC_proba.Terrestrial
-    assert gw_alert_significant.is_real_observation()
+    assert gw_alert_significant.is_real_observation
 
     _, size, mean_dist, mean_sigma = gw_alert_significant.get_error_region(0.9)
     assert size == pytest.approx(3613.1591426340738)
@@ -64,7 +64,7 @@ def test_S241102_initial(S241102_initial: GW_alert):
     assert S241102_initial.is_significant
 
     assert S241102_initial.event_class == GW_alert.CBC_proba.BBH
-    assert S241102_initial.is_real_observation()
+    assert S241102_initial.is_real_observation
 
     skymap, size, mean_dist, mean_sigma = S241102_initial.get_error_region(0.9)
     assert list(skymap.columns) == [
@@ -98,7 +98,7 @@ def test_S241102_preliminary(S241102_preliminary: GW_alert):
     assert S241102_preliminary.is_significant
 
     assert S241102_preliminary.event_class == GW_alert.CBC_proba.BBH
-    assert S241102_preliminary.is_real_observation()
+    assert S241102_preliminary.is_real_observation
 
 
 def test_S241102_update(S241102_update: GW_alert):
@@ -111,7 +111,7 @@ def test_S241102_update(S241102_update: GW_alert):
     assert S241102_update.is_significant
 
     assert S241102_update.event_class == GW_alert.CBC_proba.BBH
-    assert S241102_update.is_real_observation()
+    assert S241102_update.is_real_observation
     assert list(S241102_update.get_skymap().columns) == [
         "UNIQ",
         "PROBDENSITY",

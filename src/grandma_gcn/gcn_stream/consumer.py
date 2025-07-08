@@ -148,7 +148,7 @@ class Consumer(KafkaConsumer):
             self.gcn_stream.gcn_config["THRESHOLD"],
         )
 
-        if gw_alert.is_significant:
+        if gw_alert.is_real_observation:
             self.logger.info("Significant alert detected")
             # Initialize the workflow for the significant alert
             # This includes sending the initial alert to Slack, creating the ownCloud folder, and saving the

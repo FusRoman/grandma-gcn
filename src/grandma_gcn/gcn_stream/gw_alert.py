@@ -334,10 +334,11 @@ class GW_alert:
         """
         return self.event_time
 
+    @property
     def is_real_observation(self) -> bool:
         """
-        Test if the notice is a real observation, meaning that the id start with a S, test notice start with a M
-        and are not real gw detection.
+        Test if the notice is a real observation, meaning that the id start with a S (test notice start with a M
+        and are not real gw detection) and is significant.
 
         Returns
         -------
@@ -450,7 +451,7 @@ class GW_alert:
         msg = ""
         conclusion = self.GRANDMA_Action.NO_GRANDMA
 
-        if not self.is_real_observation():
+        if not self.is_real_observation:
             return score, msg, conclusion
 
         match self.event_type:
