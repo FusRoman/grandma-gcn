@@ -41,6 +41,8 @@ services:
       - db
     command:
       [
+        "python -m alembic upgrade head",
+        "&&",
         "python",
         "src/grandma_gcn/gcn_stream/stream.py",
         "--gcn-config-path",
