@@ -1,6 +1,6 @@
 from typing import Self
 
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import JSON, Column, Integer, String
 from sqlalchemy.orm import Session
 
 from grandma_gcn.database.base import Base
@@ -12,6 +12,7 @@ class GW_alert(Base):
     triggerId = Column(String, primary_key=True)
     thread_ts = Column(String, nullable=True)
     reception_count = Column(Integer, default=1, nullable=False)
+    payload_json = Column(JSON, nullable=True)
 
     def __repr__(self):
         return f"<GW_alert(triggerId='{self.triggerId}', thread_ts='{self.thread_ts}')>"
@@ -71,7 +72,11 @@ class GW_alert(Base):
 
     @classmethod
     def get_or_create(
-        cls, session, trigger_id: str, thread_ts: str | None = None
+        cls,
+        session,
+        trigger_id: str,
+        gw_dict_notice: dict,
+        thread_ts: str | None = None,
     ) -> Self:
         """
         Get an existing alert or create a new one if it does not exist.
@@ -92,7 +97,9 @@ class GW_alert(Base):
         """
         alert = cls.get_by_trigger_id(session, trigger_id)
         if not alert:
-            alert = cls(triggerId=trigger_id, thread_ts=thread_ts)
+            alert = cls(
+                triggerId=trigger_id, payload_json=gw_dict_notice, thread_ts=thread_ts
+            )
             session.add(alert)
             session.commit()
         return alert
