@@ -245,8 +245,7 @@ def test_gcn_stream_with_real_notice(
             # --- First run ---
             gcn_stream.run(test=True)
 
-            # --- Assertions after first alert ---
-            alert = session.get(GW_alert, "S241102br")
+            alert = session.get(GW_alert, 1)
             assert alert is not None
             assert alert.triggerId == "S241102br"
             assert alert.thread_ts == "123.456"
@@ -274,7 +273,7 @@ def test_gcn_stream_with_real_notice(
             gcn_stream.run(test=True)
 
             # --- Assertions after second alert ---
-            alert = session.get(GW_alert, "S241102br")
+            alert = session.get(GW_alert, 2)
             assert alert is not None
             assert alert.reception_count == 2
             assert alert.thread_ts == "123.456"  # should not have changed
@@ -352,7 +351,7 @@ def test_handle_significant_alert_db_and_slack(
 ):
     """
     Teste la création et la mise à jour d'une alerte GW dans la base via _handle_significant_alert,
-    en mockant la partie Slack et Owncloud.
+    en mockant la partie Slack et Owncloud, et vérifie la présence de la notice en base.
     """
     from grandma_gcn.database.gw_db import GW_alert as GW_alert_DB
     from grandma_gcn.gcn_stream.consumer import Consumer
@@ -394,7 +393,7 @@ def test_handle_significant_alert_db_and_slack(
 
     # Premier appel : création
     url, ts = consumer._handle_significant_alert(gw_alert)
-    alert = GW_alert_DB.get_by_trigger_id(session, "S240707a")
+    alert = GW_alert_DB.get_last_by_trigger_id(session, "S240707a")
     assert alert is not None
     assert alert.thread_ts == "123.456"
     assert alert.reception_count == 1
@@ -402,14 +401,14 @@ def test_handle_significant_alert_db_and_slack(
     assert ts == "123.456"
 
     # Vérifie que la notice est bien présente en base
-    alert_db = GW_alert_DB.get_by_trigger_id(session, "S240707a")
+    alert_db = GW_alert_DB.get_last_by_trigger_id(session, "S240707a")
     assert alert_db is not None
     assert alert_db.payload_json is not None
     assert alert_db.payload_json["superevent_id"] == "S240707a"
 
     # Deuxième appel : incrémentation
     url2, ts2 = consumer._handle_significant_alert(gw_alert)
-    alert2 = GW_alert_DB.get_by_trigger_id(session, "S240707a")
+    alert2 = GW_alert_DB.get_last_by_trigger_id(session, "S240707a")
     assert alert2.reception_count == 2
     assert alert2.thread_ts == "123.456"
     assert url2 == "https://owncloud/fake"
