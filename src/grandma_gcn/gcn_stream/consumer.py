@@ -173,13 +173,64 @@ class Consumer(KafkaConsumer):
         else:
             return
 
+    def push_new_alert_in_db(self, gw_alert: GW_alert) -> GW_alert_DB:
+        """
+        Push a new GW alert into the database or increment the reception count if it already exists.
+        This method performs the following steps:
+        1. Checks if the alert already exists in the database by its trigger ID.
+        2. If it does not exist, creates a new entry in the database with reception count 1.
+        3. If it exists, creates a new entry with the same trigger ID, increments the reception count, updates the thread timestamp if it is not already set and changes the payload JSON.
+        4. Commits the changes to the database.
+
+        Parameters
+        ----------
+        gw_alert : GW_alert
+            The GW alert object containing event information and thresholds.
+
+        Returns
+        -------
+        gw_alert_db : GW_alert_DB
+            The GW alert database object representing the alert in the database.
+        """
+        gw_alert_db = GW_alert_DB.get_last_by_trigger_id(
+            self.gcn_stream.session_local, gw_alert.event_id
+        )
+        if gw_alert_db is None:
+            gw_alert_db = GW_alert_DB(
+                triggerId=gw_alert.event_id,
+                thread_ts=None,
+                reception_count=1,
+                payload_json=gw_alert.gw_dict,
+            )
+            self.gcn_stream.session_local.add(gw_alert_db)
+            self.gcn_stream.session_local.commit()
+            self.logger.info(
+                f"New alert {gw_alert.event_id} added to the database with reception count 1."
+            )
+        else:
+            gw_alert_db_bis = GW_alert_DB(
+                triggerId=gw_alert.event_id,
+                thread_ts=gw_alert_db.thread_ts,
+                reception_count=gw_alert_db.reception_count + 1,
+                payload_json=gw_alert.gw_dict,
+            )
+            self.gcn_stream.session_local.add(gw_alert_db_bis)
+            self.gcn_stream.session_local.commit()
+            self.logger.info(
+                f"Alert {gw_alert.event_id} already exists in the database, incrementing reception count to {gw_alert_db_bis.reception_count}."
+            )
+            gw_alert_db = gw_alert_db_bis
+
+        return gw_alert_db
+
     def _handle_significant_alert(self, gw_alert: GW_alert) -> tuple[str, str]:
         """
         Handles the starting of the workflow for a significant alert (slack, owncloud, DB).
         This method performs the following steps:
-        1. Checks if the alert already exists in the database.
-        2. If it does not exist, creates a new entry in the database and sets the thread timestamp.
-        3. If it exists, increments the reception count.
+        1. Pushes the new alert into the database or increments the reception count if it already exists.
+        2. If the alert is new, sends a notification message to Slack and sets the thread timestamp.
+        3. Initializes the ownCloud folders for the alert.
+        4. Sends the main alert information to Slack in a thread.
 
         Parameters
         ----------
@@ -190,11 +241,7 @@ class Consumer(KafkaConsumer):
         -------
         Tuple[owncloud_url, slack_thread_ts]
         """
-        gw_alert_db = GW_alert_DB.get_or_create(
-            self.gcn_stream.session_local,
-            trigger_id=gw_alert.event_id,
-            gw_dict_notice=gw_alert.gw_dict,
-        )
+        gw_alert_db: GW_alert_DB = self.push_new_alert_in_db(gw_alert)
 
         self.logger.info(
             f"Alert {gw_alert.event_id} with triggerId {gw_alert_db.triggerId} "
@@ -218,9 +265,6 @@ class Consumer(KafkaConsumer):
                 f"Thread timestamp set for alert {gw_alert.event_id}: {notif_alert_response['ts']}"
             )
 
-        else:
-            gw_alert_db.increment_reception_count(self.gcn_stream.session_local)
-
         gw_thread_ts = gw_alert_db.thread_ts
 
         # Initialize ownCloud folders for this alert
@@ -229,7 +273,7 @@ class Consumer(KafkaConsumer):
         self.logger.info(f"Folder created on ownCloud, url: {owncloud_alert_url}")
 
         # Send main alert info to Slack (in thread)
-        _ = new_alert_on_slack(
+        data_message_response = new_alert_on_slack(
             gw_alert,
             build_gwalert_data_msg,
             self.gcn_stream.slack_client,
@@ -238,6 +282,10 @@ class Consumer(KafkaConsumer):
             thread_ts=gw_thread_ts,
             path_gw_alert=path_gw_alert,
             nb_alert_received=gw_alert_db.reception_count,
+        )
+
+        gw_alert_db.set_message_ts(
+            data_message_response["ts"], self.gcn_stream.session_local
         )
 
         self.logger.info("Send gw alert to slack")
