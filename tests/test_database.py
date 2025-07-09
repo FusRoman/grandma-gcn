@@ -81,7 +81,9 @@ def test_increment_reception_count_instance_method(sqlite_engine_and_session):
     _, SessionLocal = sqlite_engine_and_session
 
     with SessionLocal() as session:
-        alert = GW_alert.get_or_create(session, "S240707d", thread_ts="init")
+        alert = GW_alert.get_or_create(
+            session, "S240707d", thread_ts="init", gw_dict_notice={"test": "data"}
+        )
         assert alert.reception_count == 1
 
         alert.increment_reception_count(session)

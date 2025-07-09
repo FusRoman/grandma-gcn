@@ -345,3 +345,74 @@ def test_main_restart_queue_argument(tmp_path, sqlite_engine_and_session):
         stream.main(gcn_config_path=str(fake_config_path), restart_queue=True)
         _, kwargs = mock_gcnstream_cls.call_args
         assert kwargs.get("restart_queue", False) is True
+
+@pytest.mark.usefixtures("sqlite_engine_and_session")
+def test_handle_significant_alert_db_and_slack(
+    mocker, sqlite_engine_and_session, logger, threshold_config
+):
+    """
+    Teste la création et la mise à jour d'une alerte GW dans la base via _handle_significant_alert,
+    en mockant la partie Slack et Owncloud.
+    """
+    from grandma_gcn.database.gw_db import GW_alert as GW_alert_DB
+    from grandma_gcn.gcn_stream.consumer import Consumer
+    from grandma_gcn.gcn_stream.gw_alert import GW_alert
+
+    # Prépare une fausse config et session
+    _, SessionLocal = sqlite_engine_and_session
+    session = SessionLocal()
+
+    class DummyStream:
+        session_local = session
+        gcn_config = {
+            "Slack": {"gw_alert_channel": "chan", "gw_alert_channel_id": "id"},
+            "OWNCLOUD": {},
+            "THRESHOLD": threshold_config,
+            "KAFKA_CONFIG": {},
+            "CLIENT": {"id": "dummy", "secret": "dummy"},
+            "GCN_TOPICS": {"topics": ["dummy_topic"]},
+        }
+        slack_client = None
+        restart_queue = False
+
+    # Mock Slack et Owncloud
+    mocker.patch(
+        "grandma_gcn.gcn_stream.consumer.new_alert_on_slack",
+        return_value={"ts": "123.456"},
+    )
+    mocker.patch.object(
+        Consumer,
+        "init_owncloud_folders",
+        return_value=("/fake/path", "https://owncloud/fake"),
+    )
+
+    consumer = Consumer(gcn_stream=DummyStream(), logger=logger)
+
+    # Notice GW minimal
+    notice = b'{"superevent_id": "S240707a", "alert_type": "INITIAL", "event": {"significant": true}}'
+    gw_alert = GW_alert(notice, threshold_config)
+
+    # Premier appel : création
+    url, ts = consumer._handle_significant_alert(gw_alert)
+    alert = GW_alert_DB.get_by_trigger_id(session, "S240707a")
+    assert alert is not None
+    assert alert.thread_ts == "123.456"
+    assert alert.reception_count == 1
+    assert url == "https://owncloud/fake"
+    assert ts == "123.456"
+
+    # Vérifie que la notice est bien présente en base
+    alert_db = GW_alert_DB.get_by_trigger_id(session, "S240707a")
+    assert alert_db is not None
+    assert alert_db.payload_json is not None
+    assert alert_db.payload_json["superevent_id"] == "S240707a"
+
+    # Deuxième appel : incrémentation
+    url2, ts2 = consumer._handle_significant_alert(gw_alert)
+    alert2 = GW_alert_DB.get_by_trigger_id(session, "S240707a")
+    assert alert2.reception_count == 2
+    assert alert2.thread_ts == "123.456"
+    assert url2 == "https://owncloud/fake"
+    assert ts2 == "123.456"
+
+    session.close()

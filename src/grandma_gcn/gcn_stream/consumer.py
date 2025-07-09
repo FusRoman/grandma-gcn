@@ -191,7 +191,9 @@ class Consumer(KafkaConsumer):
         Tuple[owncloud_url, slack_thread_ts]
         """
         gw_alert_db = GW_alert_DB.get_or_create(
-            self.gcn_stream.session_local, trigger_id=gw_alert.event_id
+            self.gcn_stream.session_local,
+            trigger_id=gw_alert.event_id,
+            gw_dict_notice=gw_alert.gw_dict,
         )
 
         self.logger.info(
