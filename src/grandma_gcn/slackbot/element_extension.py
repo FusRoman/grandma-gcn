@@ -166,7 +166,7 @@ class PlainText(Text):
 
 
 class URLButton:
-    def __init__(self, text: str, url: str, emoji: bool) -> None:
+    def __init__(self, text: str, emoji: bool) -> None:
         """
         A button element
 
@@ -181,11 +181,27 @@ class URLButton:
         self.button = {
             "type": "button",
             "text": {"type": "plain_text", "text": text, "emoji": emoji},
-            "url": url,
         }
 
     def get_element(self) -> dict:
         return self.button
+
+    def add_url(self, url: str) -> Self:
+        """
+        Set the URL for the button.
+
+        Parameters
+        ----------
+        url : str
+            The URL to set.
+
+        Returns
+        -------
+        Self
+            The updated button element.
+        """
+        self.button["url"] = url
+        return self
 
 
 class Action:
