@@ -13,7 +13,6 @@ This allows E2E tests to run in a real or controlled integration environment wit
         def test_my_integration(): ...
 """
 
-import json
 import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -103,8 +102,6 @@ def test_e2e_grandma(mocker, logger):
         "grandma_gcn.gcn_stream.consumer.KafkaConsumer.commit", side_effect=mock_commit
     )
 
-    shared_path = Path("/shared-tmp")
-
     path_e2e_config = Path("gcn_stream_config.toml")
 
     # initialize the sql database connection
@@ -113,11 +110,9 @@ def test_e2e_grandma(mocker, logger):
     engine, session_local = init_db(DATABASE_URL, logger=logger, echo=True)
 
     with session_local() as session:
-        # Mock the GCNStream.notice_path attribute to use the temporary directory
         gcn_stream = GCNStream(
             path_e2e_config, engine, session, logger=logger, restart_queue=False
         )
-        mocker.patch.object(gcn_stream, "notice_path", shared_path)
 
         # Run the GCN stream
         gcn_stream.run(test=True)
@@ -126,14 +121,6 @@ def test_e2e_grandma(mocker, logger):
         assert mock_poll_method.call_count == 121
         assert mock_commit_method.call_count == 2
         assert len(message_queue) == 0
-
-        # Verify that the notices were saved to the temporary directory
-        saved_files = list(shared_path.glob("*.json"))
-        saved_files.sort()
-        assert len(saved_files) == 2
-        with open(saved_files[0]) as f:
-            saved_notice = json.load(f)
-        assert saved_notice["superevent_id"] == "S241102br"  # Example assertion
 
 
 @mark.e2e_light
@@ -198,8 +185,6 @@ def test_e2e_grandma_light(mocker, logger, tiles: dict[str, Table]):
         "grandma_gcn.gcn_stream.consumer.KafkaConsumer.commit", side_effect=mock_commit
     )
 
-    shared_path = Path("/shared-tmp")
-
     path_e2e_config = Path("gcn_stream_config.toml")
 
     # initialize the sql database connection
@@ -208,11 +193,9 @@ def test_e2e_grandma_light(mocker, logger, tiles: dict[str, Table]):
     engine, session_local = init_db(DATABASE_URL, logger=logger, echo=True)
 
     with session_local() as session:
-        # Mock the GCNStream.notice_path attribute to use the temporary directory
         gcn_stream = GCNStream(
             path_e2e_config, engine, session, logger=logger, restart_queue=False
         )
-        mocker.patch.object(gcn_stream, "notice_path", shared_path)
 
         # mock the Observation_plan_multiple of the gwemopt package to speed up the test
         with (
@@ -277,11 +260,3 @@ def test_e2e_grandma_light(mocker, logger, tiles: dict[str, Table]):
         assert mock_poll_method.call_count == 121
         assert mock_commit_method.call_count == 2
         assert len(message_queue) == 0
-
-        # Verify that the notices were saved to the temporary directory
-        saved_files = list(shared_path.glob("*.json"))
-        saved_files.sort()
-        assert len(saved_files) == 2
-        with open(saved_files[0]) as f:
-            saved_notice = json.load(f)
-        assert saved_notice["superevent_id"] == "S241102br"  # Example assertion

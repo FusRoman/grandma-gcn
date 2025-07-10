@@ -155,13 +155,15 @@ class Consumer(KafkaConsumer):
             # alert in the database
             # If the alert already exists in the database, it will increment the reception count and set
             # the thread timestamp if it is not already set.
-            owncloud_alert_url, gw_thread_ts = self._handle_significant_alert(gw_alert)
+            gw_alert_db, owncloud_alert_url, gw_thread_ts = (
+                self._handle_significant_alert(gw_alert)
+            )
 
             score, _, _ = gw_alert.gw_score()
             if score > 1:
                 # Process the significant alert with the automatic gwemopt process
                 self.automatic_gwemopt_process(
-                    gw_alert, owncloud_alert_url, gw_thread_ts
+                    gw_alert_db, gw_alert.thresholds, owncloud_alert_url, gw_thread_ts
                 )
 
             else:
@@ -223,7 +225,9 @@ class Consumer(KafkaConsumer):
 
         return gw_alert_db
 
-    def _handle_significant_alert(self, gw_alert: GW_alert) -> tuple[str, str]:
+    def _handle_significant_alert(
+        self, gw_alert: GW_alert
+    ) -> tuple[GW_alert_DB, str, str]:
         """
         Handles the starting of the workflow for a significant alert (slack, owncloud, DB).
         This method performs the following steps:
@@ -239,7 +243,11 @@ class Consumer(KafkaConsumer):
 
         Returns
         -------
-        Tuple[owncloud_url, slack_thread_ts]
+        tuple[GW_alert_DB, str, str]:
+            A tuple containing:
+            - gw_alert_db: The GW alert database object representing the alert in the database.
+            - owncloud_alert_url: The URL of the alert folder on ownCloud.
+            - gw_thread_ts: The thread timestamp for the alert on Slack, used to link the alert messages.
         """
         gw_alert_db: GW_alert_DB = self.push_new_alert_in_db(gw_alert)
 
@@ -290,10 +298,14 @@ class Consumer(KafkaConsumer):
 
         self.logger.info("Send gw alert to slack")
 
-        return owncloud_alert_url, gw_thread_ts
+        return gw_alert_db, owncloud_alert_url, gw_thread_ts
 
     def automatic_gwemopt_process(
-        self, gw_alert: GW_alert, owncloud_alert_url: URL, gw_thread_ts: str
+        self,
+        gw_alert_db: GW_alert_DB,
+        threshold_config: dict[str, float | int],
+        owncloud_alert_url: URL,
+        gw_thread_ts: str,
     ) -> None:
         """
         Process a significant GW alert by generating an observation plan using the GWEMOPT task.
@@ -307,8 +319,10 @@ class Consumer(KafkaConsumer):
 
         Parameters
         ----------
-        gw_alert : GW_alert
-            The significant GW alert object containing event information and thresholds.
+        gw_alert_db : GW_alert_DB
+            The GW alert database object containing event information and thresholds.
+        threshold_config : dict[str, float | int]
+            The configuration dictionary containing thresholds for the GW alert.
         owncloud_alert_url : URL
             The URL of the alert folder on ownCloud where the notice will be saved.
         gw_thread_ts : str
@@ -320,13 +334,8 @@ class Consumer(KafkaConsumer):
             Any exception during the processing is logged and re-raised.
         """
         self.logger.info(
-            f"Processing significant alert {gw_alert.event_id} with score > 1, Observation plan will be generated."
+            f"Processing significant alert {gw_alert_db.triggerId} with score > 1, Observation plan will be generated."
         )
-
-        # save the notice on disk to transfer it to the celery worker
-        path_notice = gw_alert.save_notice(self.gcn_stream.notice_path)
-
-        self.logger.info(f"Notice saved at {path_notice}")
 
         self.logger.info("Sending gwemopt task to celery worker")
 
@@ -346,17 +355,17 @@ class Consumer(KafkaConsumer):
                 self.gw_channel_id,
                 self.gcn_stream.gcn_config["OWNCLOUD"],
                 str(owncloud_alert_url),
-                str(path_notice),
+                gw_alert_db.id_gw,
                 "_".join(
                     [
-                        gw_alert.event_id,
+                        gw_alert_db.triggerId,
                         obs_strat,
                         "_".join(tel_list),
                         uuid.uuid4().hex,
                     ]
                 ),
                 self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
-                gw_alert.thresholds,
+                threshold_config,
                 obs_strat,
                 gw_thread_ts,
                 self.gcn_stream.gcn_config["GWEMOPT"]["path_galaxy_catalog"],
