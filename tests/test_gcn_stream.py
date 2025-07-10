@@ -1,6 +1,3 @@
-import json
-import tempfile
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -231,73 +228,59 @@ def test_gcn_stream_with_real_notice(
     mock_chord = mocker.patch("grandma_gcn.gcn_stream.consumer.chord", autospec=True)
     mock_chord.return_value = lambda *args, **kwargs: None
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
+    engine, session_local = sqlite_engine_and_session
 
-        engine, session_local = sqlite_engine_and_session
+    with session_local() as session:
+        gcn_stream = GCNStream(
+            gcn_config_path, engine, session, logger=logger, restart_queue=False
+        )
 
-        with session_local() as session:
-            gcn_stream = GCNStream(
-                gcn_config_path, engine, session, logger=logger, restart_queue=False
-            )
-            mocker.patch.object(gcn_stream, "notice_path", temp_path)
+        # --- First run ---
+        gcn_stream.run(test=True)
 
-            # --- First run ---
-            gcn_stream.run(test=True)
+        alert = session.get(GW_alert, 1)
+        assert alert is not None
+        assert alert.triggerId == "S241102br"
+        assert alert.thread_ts == "123.456"
+        assert alert.reception_count == 1
+        assert alert.payload_json is not None
+        assert alert.payload_json["superevent_id"] == "S241102br"
 
-            alert = session.get(GW_alert, 1)
-            assert alert is not None
-            assert alert.triggerId == "S241102br"
-            assert alert.thread_ts == "123.456"
-            assert alert.reception_count == 1
+        # Slack & OwnCloud interactions
+        assert mock_post_msg_on_slack.called
+        assert mock_owncloud_mkdir_request.call_count == 7
+        _, kwargs = mock_owncloud_mkdir_request.call_args
+        assert kwargs["method"] == "MKCOL"
+        assert kwargs["url"] == URL(
+            "https://owncloud.example.com/Candidates/GW/S241102br/VOEVENTS"
+        )
 
-            # Notice saved
-            saved_files = list(temp_path.glob("*.json"))
-            assert len(saved_files) == 1
-            with open(saved_files[0]) as f:
-                saved_notice = json.load(f)
-            assert saved_notice["superevent_id"] == "S241102br"
+    with session_local() as session:
+        # --- Second run (same alert) ---
+        push_update()  # Push same alert again
+        gcn_stream.run(test=True)
 
-            # Slack & OwnCloud interactions
-            assert mock_post_msg_on_slack.called
-            assert mock_owncloud_mkdir_request.call_count == 7
-            _, kwargs = mock_owncloud_mkdir_request.call_args
-            assert kwargs["method"] == "MKCOL"
-            assert kwargs["url"] == URL(
-                "https://owncloud.example.com/Candidates/GW/S241102br/VOEVENTS"
-            )
-
-        with session_local() as session:
-            # --- Second run (same alert) ---
-            push_update()  # Push same alert again
-            gcn_stream.run(test=True)
-
-            # --- Assertions after second alert ---
-            alert = session.get(GW_alert, 2)
-            assert alert is not None
-            assert alert.triggerId == "S241102br"
-            assert alert.reception_count == 2
-            assert alert.thread_ts == "123.456"  # should not have changed
+        # --- Assertions after second alert ---
+        alert = session.get(GW_alert, 2)
+        assert alert is not None
+        assert alert.triggerId == "S241102br"
+        assert alert.reception_count == 2
+        assert alert.thread_ts == "123.456"  # should not have changed
 
 
-def test_main_calls_gcnstream_and_run(tmp_path, sqlite_engine_and_session):
+def test_main_calls_gcnstream_and_run(tmp_path):
     fake_config_path = tmp_path / "fake_config.toml"
     fake_config_path.write_text(
         "[PATH]\ngcn_stream_log_path='log.log'\nnotice_path='.'\n"
     )
 
-    engine, session_local = sqlite_engine_and_session
-
     with (
         patch("grandma_gcn.gcn_stream.stream.init_logging") as mock_init_logging,
-        patch("grandma_gcn.gcn_stream.stream.init_db") as mock_init_db,
         patch("grandma_gcn.gcn_stream.stream.GCNStream") as mock_gcnstream_cls,
-        patch("grandma_gcn.gcn_stream.stream.dotenv_values") as mock_dotenv_values,
+        patch("grandma_gcn.database.session.dotenv_values") as mock_dotenv_values,
     ):
         mock_logger = MagicMock()
         mock_init_logging.return_value = mock_logger
-
-        mock_init_db.return_value = (engine, session_local)
 
         mock_gcnstream = MagicMock()
         mock_gcnstream_cls.return_value = mock_gcnstream
@@ -309,7 +292,6 @@ def test_main_calls_gcnstream_and_run(tmp_path, sqlite_engine_and_session):
         stream.main(gcn_config_path=str(fake_config_path))
 
         mock_init_logging.assert_called_once_with(logger_name="gcn_stream")
-        mock_init_db.assert_called_once()
         mock_gcnstream_cls.assert_called_once()
         mock_gcnstream.run.assert_called_once()
 
@@ -351,10 +333,12 @@ def test_handle_significant_alert_db_and_slack(
     mocker, sqlite_engine_and_session, logger, threshold_config
 ):
     """
-    Teste la création et la mise à jour d'une alerte GW dans la base via _handle_significant_alert,
-    en mockant la partie Slack et Owncloud, et vérifie la présence de la notice en base.
+    Test the _handle_significant_alert method of the Consumer class
+    This test checks the creation of a new alert in the database and the interaction with Slack.
+    It simulates a significant alert and verifies that the alert is created, the reception count is incremented,
+    and the Slack message is posted correctly.
+    It also checks that the OwnCloud folder is created and the alert payload is stored correctly.
     """
-    from grandma_gcn.database.gw_db import GW_alert as GW_alert_DB
     from grandma_gcn.gcn_stream.consumer import Consumer
     from grandma_gcn.gcn_stream.gw_alert import GW_alert
 
@@ -393,23 +377,17 @@ def test_handle_significant_alert_db_and_slack(
     gw_alert = GW_alert(notice, threshold_config)
 
     # Premier appel : création
-    url, ts = consumer._handle_significant_alert(gw_alert)
-    alert = GW_alert_DB.get_last_by_trigger_id(session, "S240707a")
+    alert, url, ts = consumer._handle_significant_alert(gw_alert)
     assert alert is not None
     assert alert.thread_ts == "123.456"
     assert alert.reception_count == 1
     assert url == "https://owncloud/fake"
     assert ts == "123.456"
-
-    # Vérifie que la notice est bien présente en base
-    alert_db = GW_alert_DB.get_last_by_trigger_id(session, "S240707a")
-    assert alert_db is not None
-    assert alert_db.payload_json is not None
-    assert alert_db.payload_json["superevent_id"] == "S240707a"
+    assert alert.payload_json is not None
+    assert alert.payload_json["superevent_id"] == "S240707a"
 
     # Deuxième appel : incrémentation
-    url2, ts2 = consumer._handle_significant_alert(gw_alert)
-    alert2 = GW_alert_DB.get_last_by_trigger_id(session, "S240707a")
+    alert2, url2, ts2 = consumer._handle_significant_alert(gw_alert)
     assert alert2.reception_count == 2
     assert alert2.thread_ts == "123.456"
     assert url2 == "https://owncloud/fake"

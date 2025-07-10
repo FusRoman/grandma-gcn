@@ -1,9 +1,13 @@
+from functools import wraps
 from os import environ
 from pathlib import Path
 
 from celery import Celery
 from celery.utils.log import get_task_logger
 from dotenv import dotenv_values
+from sqlalchemy.exc import SQLAlchemyError
+
+from grandma_gcn.database.session import get_session_local
 
 
 def initialize_celery(env_file: Path) -> Celery:
@@ -45,6 +49,33 @@ def initialize_celery(env_file: Path) -> Celery:
     )
 
     return app
+
+
+def with_session(fn):
+    """
+    Decorator that injects a SQLAlchemy session into a function and
+    ensures it is properly committed or rolled back and closed.
+
+    The session is automatically committed if no exceptions occur.
+    Otherwise, it is rolled back.
+
+    The function being decorated must accept the session as its first argument.
+    """
+
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        SessionLocal = get_session_local()
+        session = SessionLocal()
+        try:
+            with session.begin():
+                return fn(session, *args, **kwargs)
+        except SQLAlchemyError as e:
+            session.rollback()  # rollback in case of error outside the context block
+            raise e
+        finally:
+            session.close()
+
+    return wrapper
 
 
 name_env_file = ".env"

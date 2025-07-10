@@ -9,7 +9,12 @@ from grandma_gcn.gcn_stream.gw_alert import GW_alert
 
 def test_gw_alert_from_db_model_minimal():
     class DummyDBModel:
-        payload_json = '{"superevent_id": "S1", "event": {"significant": false}, "alert_type": "INITIAL", "urls": {"gracedb": "url"}}'
+        payload_json = {
+            "superevent_id": "S1",
+            "event": {"significant": False},
+            "alert_type": "INITIAL",
+            "urls": {"gracedb": "url"},
+        }
 
     thresholds = {
         "BBH_proba": 0.5,
@@ -27,7 +32,7 @@ def test_gw_alert_from_db_model_minimal():
 def make_db_model_from_notice_bytes(session, notice_bytes: bytes) -> DBGWAlert:
     # Load JSON from bytes and store as a JSON string in the DB
     notice_dict = json.load(io.BytesIO(notice_bytes))
-    db_model = DBGWAlert(payload_json=json.dumps(notice_dict))
+    db_model = DBGWAlert(payload_json=notice_dict)
     session.add(db_model)
     session.commit()
     return db_model
@@ -64,9 +69,7 @@ def test_gw_alert_from_db_model_with_real_notice(
 
 def make_fake_db_model_sqlite(session, payload_json: dict) -> DBGWAlert:
     # Insert a DB model in the sqlite session, store payload_json as a JSON string
-    import json
-
-    db_model = DBGWAlert(payload_json=json.dumps(payload_json))
+    db_model = DBGWAlert(payload_json=payload_json)
     session.add(db_model)
     session.commit()
     return db_model

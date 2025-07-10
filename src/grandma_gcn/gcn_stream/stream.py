@@ -2,12 +2,11 @@ from pathlib import Path
 from typing import Any
 
 import tomli
-from dotenv import dotenv_values
 from fink_utils.slack_bot.bot import init_slackbot
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from grandma_gcn.database.init_db import init_db
+from grandma_gcn.database.session import get_engine, get_session_local
 from grandma_gcn.gcn_stream.consumer import Consumer
 from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine, init_logging
 
@@ -48,7 +47,6 @@ class GCNStream:
 
         self.slack_client = init_slackbot(self.logger)
 
-        self.notice_path = Path(self._gcn_config["PATH"]["notice_path"])
         self.logger.info("GCN stream successfully initialized")
 
     @property
@@ -118,10 +116,8 @@ def main(
     """
     logger = init_logging(logger_name="gcn_stream")
 
-    # initialize the sql database connection
-    config = dotenv_values(".env")  # Load environment variables from .env file
-    DATABASE_URL = config["SQLALCHEMY_DATABASE_URI"]
-    engine, session_local = init_db(DATABASE_URL, logger=logger, echo=True)
+    session_local = get_session_local(Path(".env"))
+    engine = get_engine()
 
     with session_local() as session:
         gcn_stream = GCNStream(

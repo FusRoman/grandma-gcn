@@ -88,7 +88,7 @@ class GW_alert:
         GW_alert
             An instance of GW_alert initialized with the database model data.
         """
-        return cls(db_model.payload_json.encode("utf-8"), thresholds)
+        return cls(json.dumps(db_model.payload_json).encode("utf-8"), thresholds)
 
     @property
     def BBH_proba(self) -> float | None:
