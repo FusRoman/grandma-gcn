@@ -155,12 +155,15 @@ class Consumer(KafkaConsumer):
             # alert in the database
             # If the alert already exists in the database, it will increment the reception count and set
             # the thread timestamp if it is not already set.
-            gw_alert_db, owncloud_alert_url, gw_thread_ts = (
-                self._handle_significant_alert(gw_alert)
-            )
 
             score, _, _ = gw_alert.gw_score()
-            if score > 1:
+            is_ready_for_processing = score > 1
+
+            gw_alert_db, owncloud_alert_url, gw_thread_ts = (
+                self._handle_significant_alert(gw_alert, is_ready_for_processing)
+            )
+
+            if is_ready_for_processing:
                 # Process the significant alert with the automatic gwemopt process
                 self.automatic_gwemopt_process(
                     gw_alert_db, gw_alert.thresholds, owncloud_alert_url, gw_thread_ts
@@ -226,7 +229,7 @@ class Consumer(KafkaConsumer):
         return gw_alert_db
 
     def _handle_significant_alert(
-        self, gw_alert: GW_alert
+        self, gw_alert: GW_alert, is_ready_for_processing: bool
     ) -> tuple[GW_alert_DB, str, str]:
         """
         Handles the starting of the workflow for a significant alert (slack, owncloud, DB).
@@ -240,6 +243,8 @@ class Consumer(KafkaConsumer):
         ----------
         gw_alert : GW_alert
             The significant GW alert object containing event information and thresholds.
+        is_ready_for_processing : bool
+            Indicates whether the alert is ready for processing based on its significance score.
 
         Returns
         -------
@@ -290,6 +295,7 @@ class Consumer(KafkaConsumer):
             thread_ts=gw_thread_ts,
             path_gw_alert=path_gw_alert,
             nb_alert_received=gw_alert_db.reception_count,
+            add_obs_plan_button=not is_ready_for_processing,
         )
 
         gw_alert_db.set_message_ts(
@@ -345,6 +351,13 @@ class Consumer(KafkaConsumer):
             "observation_strategy"
         ]
 
+        # Indicate that the alert is being processed
+        # This is used to prevent multiple processes from running the same alert
+        gw_alert_db.is_process_running = True
+        self.gcn_stream.session_local.commit()
+        self.logger.info(
+            f"Alert {gw_alert_db.triggerId} is being processed, setting is_process_running to True"
+        )
         # construct a list of tasks for each sublist of telescopes, number of tiles and observation strategy
         gwemopt_tasks = [
             gwemopt_task.s(
