@@ -275,6 +275,7 @@ def test_gcn_stream_with_real_notice(
             # --- Assertions after second alert ---
             alert = session.get(GW_alert, 2)
             assert alert is not None
+            assert alert.triggerId == "S241102br"
             assert alert.reception_count == 2
             assert alert.thread_ts == "123.456"  # should not have changed
 

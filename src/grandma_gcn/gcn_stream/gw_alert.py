@@ -25,6 +25,8 @@ from ligo.skymap.bayestar import rasterize
 from numpy import array, cumsum, float64, inf, isinf, logical_not, mean, ndarray, pi
 from spherical_geometry.polygon import SphericalPolygon
 
+from grandma_gcn.database.gw_db import GW_alert as DBGWAlert
+
 
 def bytes_to_dict(notice: bytes) -> dict:
     """
@@ -66,6 +68,27 @@ class GW_alert:
         self.thresholds = thresholds
 
         self.logger = logging.getLogger(f"gcn_stream.gw_alert_{self.event_id}")
+
+    @classmethod
+    def from_db_model(
+        cls, db_model: DBGWAlert, thresholds: dict[str, float | int]
+    ) -> Self:
+        """
+        Create a GW_alert instance from a database model.
+
+        Parameters
+        ----------
+        db_model : Any
+            The database model instance containing the notice.
+        thresholds : dict[str, float | int]
+            The thresholds for the event.
+
+        Returns
+        -------
+        GW_alert
+            An instance of GW_alert initialized with the database model data.
+        """
+        return cls(db_model.payload_json.encode("utf-8"), thresholds)
 
     @property
     def BBH_proba(self) -> float | None:
