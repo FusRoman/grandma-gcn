@@ -67,7 +67,7 @@ class GCNStream:
         """
         return self._session_local
 
-    def run(self, test: bool = False) -> None:
+    def run(self, test: bool = False, max_retries: int = 3600) -> None:
         """
         Run the polling infinite loop of the GCN stream with periodic configuration checks
         """
@@ -77,7 +77,7 @@ class GCNStream:
         self.logger.info("Starting GCN stream consumer")
         while True:
             self.logger.info("GCN stream consumer is active, waiting for messages...")
-            gcn_consumer.start_poll_loop(max_retries=3600)
+            gcn_consumer.start_poll_loop(max_retries=max_retries)
             if test:
                 break
 
@@ -112,6 +112,7 @@ def main(
     gcn_config_path: str = "instance/gcn_config.toml",
     restart_queue: bool = False,
     test: bool = False,
+    max_retries: int = 3600,
 ) -> None:
     """
     Launch the GCN stream, an infinite loop waiting for notices from the GCN network.
@@ -133,7 +134,7 @@ def main(
         gcn_stream = GCNStream(
             Path(gcn_config_path), engine, session, logger, restart_queue=restart_queue
         )
-        gcn_stream.run()
+        gcn_stream.run(test=test, max_retries=max_retries)
 
 
 if __name__ == "__main__":  # pragma: no cover
