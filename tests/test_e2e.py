@@ -62,8 +62,6 @@ def test_e2e_grandma(mocker, logger):
 
     The owncloud url should be the WebDAV url of the owncloud instance.
     """
-    from grandma_gcn.gcn_stream.stream import GCNStream
-
     # Simulate a message queue
     message_queue = []
 
@@ -106,25 +104,16 @@ def test_e2e_grandma(mocker, logger):
         "grandma_gcn.gcn_stream.consumer.KafkaConsumer.commit", side_effect=mock_commit
     )
 
-    path_e2e_config = Path("gcn_stream_config.toml")
+    path_e2e_config = "gcn_stream_config.toml"
 
-    # initialize the sql database connection
-    config = dotenv_values(".env")  # Load environment variables from .env file
-    DATABASE_URL = config["SQLALCHEMY_DATABASE_URI"]
-    engine, session_local = init_db(DATABASE_URL, logger=logger, echo=True)
+    from grandma_gcn.gcn_stream.stream import main
 
-    with session_local() as session:
-        gcn_stream = GCNStream(
-            path_e2e_config, engine, session, logger=logger, restart_queue=False
-        )
+    main(path_e2e_config, True)
 
-        # Run the GCN stream
-        gcn_stream.run(test=True)
-
-        # Assertions
-        assert mock_poll_method.call_count == 121
-        assert mock_commit_method.call_count == 2
-        assert len(message_queue) == 0
+    # Assertions
+    assert mock_poll_method.call_count == 121
+    assert mock_commit_method.call_count == 2
+    assert len(message_queue) == 0
 
 
 @mark.e2e_light

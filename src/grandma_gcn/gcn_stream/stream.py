@@ -109,10 +109,20 @@ def load_gcn_config(config_path: Path, logger: LoggerNewLine) -> dict[str, Any]:
 
 
 def main(
-    gcn_config_path: str = "instance/gcn_config.toml", restart_queue: bool = False
+    gcn_config_path: str = "instance/gcn_config.toml",
+    restart_queue: bool = False,
+    test: bool = False,
 ) -> None:
     """
     Launch the GCN stream, an infinite loop waiting for notices from the GCN network.
+
+    Parameters
+    ----------
+    gcn_config_path : str
+        Path to the GCN configuration file, by default "instance/gcn_config.toml"
+    test : bool, optional
+        If True, run the GCN stream in test mode, which will stop after one iteration
+        (useful for debugging), by default False
     """
     logger = init_logging(logger_name="gcn_stream")
 
