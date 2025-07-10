@@ -52,7 +52,7 @@ services:
       [
         "/bin/sh",
         "-c",
-        "pip install --no-cache-dir -e /home/${USR}/code && exec python -m celery -A grandma_gcn.worker.celery_app worker --loglevel=DEBUG",
+        "pip install --no-cache-dir -e /home/${USR}/code && exec python -m celery -A grandma_gcn.worker.celery_app worker --loglevel=DEBUG --concurrency=6",
       ]
 
   db:
