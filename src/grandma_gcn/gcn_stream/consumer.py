@@ -155,13 +155,18 @@ class Consumer(KafkaConsumer):
             # alert in the database
             # If the alert already exists in the database, it will increment the reception count and set
             # the thread timestamp if it is not already set.
-            owncloud_alert_url, gw_thread_ts = self._handle_significant_alert(gw_alert)
 
             score, _, _ = gw_alert.gw_score()
-            if score > 1:
+            is_ready_for_processing = score > 1
+
+            gw_alert_db, owncloud_alert_url, gw_thread_ts = (
+                self._handle_significant_alert(gw_alert, is_ready_for_processing)
+            )
+
+            if is_ready_for_processing:
                 # Process the significant alert with the automatic gwemopt process
                 self.automatic_gwemopt_process(
-                    gw_alert, owncloud_alert_url, gw_thread_ts
+                    gw_alert_db, gw_alert.thresholds, owncloud_alert_url, gw_thread_ts
                 )
 
             else:
@@ -173,26 +178,83 @@ class Consumer(KafkaConsumer):
         else:
             return
 
-    def _handle_significant_alert(self, gw_alert: GW_alert) -> tuple[str, str]:
+    def push_new_alert_in_db(self, gw_alert: GW_alert) -> GW_alert_DB:
+        """
+        Push a new GW alert into the database or increment the reception count if it already exists.
+        This method performs the following steps:
+        1. Checks if the alert already exists in the database by its trigger ID.
+        2. If it does not exist, creates a new entry in the database with reception count 1.
+        3. If it exists, creates a new entry with the same trigger ID, increments the reception count, updates the thread timestamp if it is not already set and changes the payload JSON.
+        4. Commits the changes to the database.
+
+        Parameters
+        ----------
+        gw_alert : GW_alert
+            The GW alert object containing event information and thresholds.
+
+        Returns
+        -------
+        gw_alert_db : GW_alert_DB
+            The GW alert database object representing the alert in the database.
+        """
+        gw_alert_db = GW_alert_DB.get_last_by_trigger_id(
+            self.gcn_stream.session_local, gw_alert.event_id
+        )
+        if gw_alert_db is None:
+            gw_alert_db = GW_alert_DB(
+                triggerId=gw_alert.event_id,
+                thread_ts=None,
+                reception_count=1,
+                payload_json=gw_alert.gw_dict,
+            )
+            self.gcn_stream.session_local.add(gw_alert_db)
+            self.gcn_stream.session_local.commit()
+            self.logger.info(
+                f"New alert {gw_alert.event_id} added to the database with reception count 1."
+            )
+        else:
+            gw_alert_db_bis = GW_alert_DB(
+                triggerId=gw_alert.event_id,
+                thread_ts=gw_alert_db.thread_ts,
+                reception_count=gw_alert_db.reception_count + 1,
+                payload_json=gw_alert.gw_dict,
+            )
+            self.gcn_stream.session_local.add(gw_alert_db_bis)
+            self.gcn_stream.session_local.commit()
+            self.logger.info(
+                f"Alert {gw_alert.event_id} already exists in the database, incrementing reception count to {gw_alert_db_bis.reception_count}."
+            )
+            gw_alert_db = gw_alert_db_bis
+
+        return gw_alert_db
+
+    def _handle_significant_alert(
+        self, gw_alert: GW_alert, is_ready_for_processing: bool
+    ) -> tuple[GW_alert_DB, str, str]:
         """
         Handles the starting of the workflow for a significant alert (slack, owncloud, DB).
         This method performs the following steps:
-        1. Checks if the alert already exists in the database.
-        2. If it does not exist, creates a new entry in the database and sets the thread timestamp.
-        3. If it exists, increments the reception count.
+        1. Pushes the new alert into the database or increments the reception count if it already exists.
+        2. If the alert is new, sends a notification message to Slack and sets the thread timestamp.
+        3. Initializes the ownCloud folders for the alert.
+        4. Sends the main alert information to Slack in a thread.
 
         Parameters
         ----------
         gw_alert : GW_alert
             The significant GW alert object containing event information and thresholds.
+        is_ready_for_processing : bool
+            Indicates whether the alert is ready for processing based on its significance score.
 
         Returns
         -------
-        Tuple[owncloud_url, slack_thread_ts]
+        tuple[GW_alert_DB, str, str]:
+            A tuple containing:
+            - gw_alert_db: The GW alert database object representing the alert in the database.
+            - owncloud_alert_url: The URL of the alert folder on ownCloud.
+            - gw_thread_ts: The thread timestamp for the alert on Slack, used to link the alert messages.
         """
-        gw_alert_db = GW_alert_DB.get_or_create(
-            self.gcn_stream.session_local, trigger_id=gw_alert.event_id
-        )
+        gw_alert_db: GW_alert_DB = self.push_new_alert_in_db(gw_alert)
 
         self.logger.info(
             f"Alert {gw_alert.event_id} with triggerId {gw_alert_db.triggerId} "
@@ -216,9 +278,6 @@ class Consumer(KafkaConsumer):
                 f"Thread timestamp set for alert {gw_alert.event_id}: {notif_alert_response['ts']}"
             )
 
-        else:
-            gw_alert_db.increment_reception_count(self.gcn_stream.session_local)
-
         gw_thread_ts = gw_alert_db.thread_ts
 
         # Initialize ownCloud folders for this alert
@@ -227,7 +286,9 @@ class Consumer(KafkaConsumer):
         self.logger.info(f"Folder created on ownCloud, url: {owncloud_alert_url}")
 
         # Send main alert info to Slack (in thread)
-        _ = new_alert_on_slack(
+        # The not is_ready_for_processing flag is used to determine whether to add the observation plan button
+        # to the message. If the alert is not ready for processing, the button will be added to the message.
+        data_message_response = new_alert_on_slack(
             gw_alert,
             build_gwalert_data_msg,
             self.gcn_stream.slack_client,
@@ -236,14 +297,23 @@ class Consumer(KafkaConsumer):
             thread_ts=gw_thread_ts,
             path_gw_alert=path_gw_alert,
             nb_alert_received=gw_alert_db.reception_count,
+            add_obs_plan_button=not is_ready_for_processing,
+        )
+
+        gw_alert_db.set_message_ts(
+            data_message_response["ts"], self.gcn_stream.session_local
         )
 
         self.logger.info("Send gw alert to slack")
 
-        return owncloud_alert_url, gw_thread_ts
+        return gw_alert_db, owncloud_alert_url, gw_thread_ts
 
     def automatic_gwemopt_process(
-        self, gw_alert: GW_alert, owncloud_alert_url: URL, gw_thread_ts: str
+        self,
+        gw_alert_db: GW_alert_DB,
+        threshold_config: dict[str, float | int],
+        owncloud_alert_url: URL,
+        gw_thread_ts: str,
     ) -> None:
         """
         Process a significant GW alert by generating an observation plan using the GWEMOPT task.
@@ -257,8 +327,10 @@ class Consumer(KafkaConsumer):
 
         Parameters
         ----------
-        gw_alert : GW_alert
-            The significant GW alert object containing event information and thresholds.
+        gw_alert_db : GW_alert_DB
+            The GW alert database object containing event information and thresholds.
+        threshold_config : dict[str, float | int]
+            The configuration dictionary containing thresholds for the GW alert.
         owncloud_alert_url : URL
             The URL of the alert folder on ownCloud where the notice will be saved.
         gw_thread_ts : str
@@ -270,13 +342,8 @@ class Consumer(KafkaConsumer):
             Any exception during the processing is logged and re-raised.
         """
         self.logger.info(
-            f"Processing significant alert {gw_alert.event_id} with score > 1, Observation plan will be generated."
+            f"Processing significant alert {gw_alert_db.triggerId} with score > 1, Observation plan will be generated."
         )
-
-        # save the notice on disk to transfer it to the celery worker
-        path_notice = gw_alert.save_notice(self.gcn_stream.notice_path)
-
-        self.logger.info(f"Notice saved at {path_notice}")
 
         self.logger.info("Sending gwemopt task to celery worker")
 
@@ -286,6 +353,13 @@ class Consumer(KafkaConsumer):
             "observation_strategy"
         ]
 
+        # Indicate that the alert is being processed
+        # This is used to prevent multiple processes from running the same alert
+        gw_alert_db.is_process_running = True
+        self.gcn_stream.session_local.commit()
+        self.logger.info(
+            f"Alert {gw_alert_db.triggerId} is being processed, setting is_process_running to True"
+        )
         # construct a list of tasks for each sublist of telescopes, number of tiles and observation strategy
         gwemopt_tasks = [
             gwemopt_task.s(
@@ -296,17 +370,17 @@ class Consumer(KafkaConsumer):
                 self.gw_channel_id,
                 self.gcn_stream.gcn_config["OWNCLOUD"],
                 str(owncloud_alert_url),
-                str(path_notice),
+                gw_alert_db.id_gw,
                 "_".join(
                     [
-                        gw_alert.event_id,
+                        gw_alert_db.triggerId,
                         obs_strat,
                         "_".join(tel_list),
                         uuid.uuid4().hex,
                     ]
                 ),
                 self.gcn_stream.gcn_config["PATH"]["celery_task_log_path"],
-                gw_alert.thresholds,
+                threshold_config,
                 obs_strat,
                 gw_thread_ts,
                 self.gcn_stream.gcn_config["GWEMOPT"]["path_galaxy_catalog"],

@@ -2,25 +2,23 @@ import pickle
 from pathlib import Path
 
 import pytest
+import sqlalchemy
 from astropy.table import Table
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
-from grandma_gcn.database.base import Base
+from grandma_gcn.database.gw_db import Base as GWBase
 from grandma_gcn.gcn_stream.gcn_logging import init_logging
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 
 
 @pytest.fixture
-def sqlite_engine_and_session():
-    engine = create_engine("sqlite:///:memory:", echo=False, future=True)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-
-    Base.metadata.create_all(engine)
-
-    yield engine, SessionLocal
-
-    Base.metadata.drop_all(engine)
+def sqlite_engine_and_session(tmp_path):
+    db_path = tmp_path / "testdb.sqlite"
+    engine = sqlalchemy.create_engine(
+        f"sqlite:///{db_path}", connect_args={"check_same_thread": False}
+    )
+    GWBase.metadata.create_all(engine)
+    Session = sqlalchemy.orm.sessionmaker(bind=engine)
+    return engine, Session
 
 
 @pytest.fixture(autouse=True)

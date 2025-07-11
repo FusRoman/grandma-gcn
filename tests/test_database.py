@@ -56,7 +56,7 @@ def test_get_or_set_thread_ts_sets_only_if_none(sqlite_engine_and_session):
     _, SessionLocal = sqlite_engine_and_session
 
     with SessionLocal() as session:
-        alert = GW_alert.get_by_trigger_id(session, "UNKNOWN")
+        alert = GW_alert.get_last_by_trigger_id(session, "UNKNOWN")
         assert alert is None
 
         result = GW_alert.get_or_set_thread_ts(session, "UNKNOWN", "789.000")
@@ -81,7 +81,9 @@ def test_increment_reception_count_instance_method(sqlite_engine_and_session):
     _, SessionLocal = sqlite_engine_and_session
 
     with SessionLocal() as session:
-        alert = GW_alert.get_or_create(session, "S240707d", thread_ts="init")
+        alert = GW_alert.get_or_create(
+            session, "S240707d", thread_ts="init", gw_dict_notice={"test": "data"}
+        )
         assert alert.reception_count == 1
 
         alert.increment_reception_count(session)
