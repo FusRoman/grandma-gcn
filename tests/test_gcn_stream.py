@@ -387,7 +387,7 @@ def test_handle_significant_alert_db_and_slack(
     assert alert.payload_json["superevent_id"] == "S240707a"
 
     # Deuxième appel : incrémentation
-    alert2, url2, ts2 = consumer._handle_significant_alert(gw_alert)
+    alert2, url2, ts2 = consumer._handle_significant_alert(gw_alert, True)
     assert alert2.reception_count == 2
     assert alert2.thread_ts == "123.456"
     assert url2 == "https://owncloud/fake"
