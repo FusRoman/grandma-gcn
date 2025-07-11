@@ -69,21 +69,21 @@ def test_handle_significant_alert_thread_and_message_ts(
 
         # First alert
         alert1 = GW_alert(fake_notice_bytes("S999999xx"), threshold_config)
-        consumer._handle_significant_alert(alert1)
+        consumer._handle_significant_alert(alert1, False)
         db_alert1 = DBGWAlert.get_last_by_trigger_id(session, "S999999xx")
         assert db_alert1.thread_ts == "thread-1"
         assert db_alert1.message_ts == "msg-1"
 
         # Other alert
         alert_other = GW_alert(fake_notice_bytes("S111111xx"), threshold_config)
-        consumer._handle_significant_alert(alert_other)
+        consumer._handle_significant_alert(alert_other, False)
         db_alert_other = DBGWAlert.get_last_by_trigger_id(session, "S111111xx")
         assert db_alert_other.thread_ts == "thread-2"
         assert db_alert_other.message_ts == "msg-2"
 
         # Second alert with same triggerId
         alert2 = GW_alert(fake_notice_bytes("S999999xx"), threshold_config)
-        consumer._handle_significant_alert(alert2)
+        consumer._handle_significant_alert(alert2, False)
         db_alert2 = DBGWAlert.get_last_by_trigger_id(session, "S999999xx")
         assert db_alert2.thread_ts == "thread-1"
         assert db_alert2.message_ts == "msg-3"

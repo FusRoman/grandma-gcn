@@ -377,7 +377,7 @@ def test_handle_significant_alert_db_and_slack(
     gw_alert = GW_alert(notice, threshold_config)
 
     # Premier appel : création
-    alert, url, ts = consumer._handle_significant_alert(gw_alert)
+    alert, url, ts = consumer._handle_significant_alert(gw_alert, False)
     assert alert is not None
     assert alert.thread_ts == "123.456"
     assert alert.reception_count == 1
