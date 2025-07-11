@@ -286,6 +286,8 @@ class Consumer(KafkaConsumer):
         self.logger.info(f"Folder created on ownCloud, url: {owncloud_alert_url}")
 
         # Send main alert info to Slack (in thread)
+        # The not is_ready_for_processing flag is used to determine whether to add the observation plan button
+        # to the message. If the alert is not ready for processing, the button will be added to the message.
         data_message_response = new_alert_on_slack(
             gw_alert,
             build_gwalert_data_msg,
