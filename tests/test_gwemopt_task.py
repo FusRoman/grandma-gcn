@@ -203,6 +203,9 @@ def test_gwemopt_task_celery(
             thread_ts=None,
             reception_count=1,
             payload_json=S241102_update.gw_dict,
+            owncloud_url="https://owncloud.example.com/fake1",
+            message_ts="123.456",
+            is_process_running=False,
         )
         session.add(gw_alert_db)
         session.commit()
@@ -254,7 +257,6 @@ def test_gwemopt_task_celery(
                                         "password": "test_pass",
                                         "base_url": "https://owncloud.example.com",
                                     },
-                                    "https://owncloud.example.com/S241102br/GWEMOPT/UPDATE_fixeduuidhex",
                                     id_gw_alert_db,
                                     str(path_output),
                                     str(tmp_path),

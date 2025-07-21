@@ -202,30 +202,33 @@ def test_gcn_stream_with_real_notice(
         "grandma_gcn.gcn_stream.consumer.KafkaConsumer.commit", side_effect=mock_commit
     )
 
+    slack_ts = iter(["123.456", "789.101", "101.112"])
     mock_post_msg_on_slack = mocker.patch(
-        "grandma_gcn.slackbot.gw_message.post_msg_on_slack"
+        "grandma_gcn.slackbot.gw_message.post_msg_on_slack",
+        side_effect=lambda *args, **kwargs: {"ts": next(slack_ts)},
     )
-    mock_post_msg_on_slack.return_value = {"ts": "123.456"}
 
     mock_owncloud_mkdir_request = mocker.patch("requests.request")
     mock_owncloud_mkdir_request.return_value.status_code = 201
 
     # Celery mocks
     mock_gwemopt_task = mocker.patch(
-        "grandma_gcn.gcn_stream.consumer.gwemopt_task", autospec=True
+        "grandma_gcn.gcn_stream.automatic_gwemopt.gwemopt_task", autospec=True
     )
     mock_gwemopt_task.s.return_value = MagicMock(
         apply_async=MagicMock(), delay=MagicMock()
     )
 
     mock_gwemopt_post_task = mocker.patch(
-        "grandma_gcn.gcn_stream.consumer.gwemopt_post_task", autospec=True
+        "grandma_gcn.gcn_stream.automatic_gwemopt.gwemopt_post_task", autospec=True
     )
     mock_gwemopt_post_task.s.return_value = MagicMock(
         apply_async=MagicMock(), delay=MagicMock()
     )
 
-    mock_chord = mocker.patch("grandma_gcn.gcn_stream.consumer.chord", autospec=True)
+    mock_chord = mocker.patch(
+        "grandma_gcn.gcn_stream.automatic_gwemopt.chord", autospec=True
+    )
     mock_chord.return_value = lambda *args, **kwargs: None
 
     engine, session_local = sqlite_engine_and_session
@@ -242,6 +245,7 @@ def test_gcn_stream_with_real_notice(
         assert alert is not None
         assert alert.triggerId == "S241102br"
         assert alert.thread_ts == "123.456"
+        assert alert.message_ts == "789.101"
         assert alert.reception_count == 1
         assert alert.payload_json is not None
         assert alert.payload_json["superevent_id"] == "S241102br"
@@ -266,6 +270,7 @@ def test_gcn_stream_with_real_notice(
         assert alert.triggerId == "S241102br"
         assert alert.reception_count == 2
         assert alert.thread_ts == "123.456"  # should not have changed
+        assert alert.message_ts == "101.112"
 
 
 def test_main_calls_gcnstream_and_run(tmp_path):
@@ -360,14 +365,24 @@ def test_handle_significant_alert_db_and_slack(
         restart_queue = False
 
     # Mock Slack et Owncloud
+    slack_ts = iter(["123.456", "789.101", "101.112"])
     mocker.patch(
         "grandma_gcn.gcn_stream.consumer.new_alert_on_slack",
-        return_value={"ts": "123.456"},
+        side_effect=lambda *args, **kwargs: {"ts": next(slack_ts)},
+    )
+
+    # Mock Owncloud client
+    owncloud_urls = iter(
+        [
+            ("/fake/path1", "https://owncloud/fake1"),
+            ("/fake/path2", "https://owncloud/fake2"),
+            ("/fake/path1", "https://owncloud/fake1"),  # pour le même triggerId
+        ]
     )
     mocker.patch.object(
         Consumer,
         "init_owncloud_folders",
-        return_value=("/fake/path", "https://owncloud/fake"),
+        side_effect=lambda *args, **kwargs: next(owncloud_urls),
     )
 
     consumer = Consumer(gcn_stream=DummyStream(), logger=logger)
@@ -377,20 +392,20 @@ def test_handle_significant_alert_db_and_slack(
     gw_alert = GW_alert(notice, threshold_config)
 
     # Premier appel : création
-    alert, url, ts = consumer._handle_significant_alert(gw_alert, False)
+    alert = consumer._handle_significant_alert(gw_alert, False)
     assert alert is not None
     assert alert.thread_ts == "123.456"
     assert alert.reception_count == 1
-    assert url == "https://owncloud/fake"
-    assert ts == "123.456"
+    assert alert.owncloud_url == "https://owncloud/fake1"
+    assert alert.message_ts == "789.101"
     assert alert.payload_json is not None
     assert alert.payload_json["superevent_id"] == "S240707a"
 
     # Deuxième appel : incrémentation
-    alert2, url2, ts2 = consumer._handle_significant_alert(gw_alert, True)
+    alert2 = consumer._handle_significant_alert(gw_alert, True)
     assert alert2.reception_count == 2
     assert alert2.thread_ts == "123.456"
-    assert url2 == "https://owncloud/fake"
-    assert ts2 == "123.456"
+    assert alert2.owncloud_url == "https://owncloud/fake2"
+    assert alert2.message_ts == "101.112"
 
     session.close()

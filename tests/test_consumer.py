@@ -55,9 +55,19 @@ def test_handle_significant_alert_thread_and_message_ts(
             "grandma_gcn.gcn_stream.consumer.build_gwalert_data_msg", MagicMock()
         )
         mocker.patch("grandma_gcn.gcn_stream.consumer.OwncloudClient", MagicMock())
+        owncloud_urls = iter(
+            [
+                ("/fake/path1", "owncloud-url-1"),
+                ("/fake/path2", "owncloud-url-2"),
+                (
+                    "/fake/path1",
+                    "owncloud-url-3",
+                ),  # Pour le second alert avec même triggerId
+            ]
+        )
         mocker.patch(
             "grandma_gcn.gcn_stream.consumer.Consumer.init_owncloud_folders",
-            MagicMock(return_value=("/fake/path", "owncloud-url")),
+            side_effect=lambda *args, **kwargs: next(owncloud_urls),
         )
 
         gcn_stream = GCNStream(
