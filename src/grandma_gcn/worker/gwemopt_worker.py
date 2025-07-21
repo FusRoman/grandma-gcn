@@ -512,7 +512,9 @@ def merge_galaxy_file(
 
 @celery.task(name="gwemopt_post_task")
 def gwemopt_post_task(
-    results: tuple[str, str, tuple[str, str]], owncloud_config: dict[str, Any]
+    results: tuple[str, str, tuple[str, str]],
+    owncloud_config: dict[str, Any],
+    path_log: str,
 ) -> None:
     """
     Task to clean up after the gwemopt task has completed.
@@ -527,23 +529,34 @@ def gwemopt_post_task(
     path_log : str
         Path to the log directory where the task logs will be stored.
     """
+    task_id = current_task.request.id
+    logger, log_file_path = setup_task_logger(
+        f"gwemopt_task_{task_id}", Path(path_log), task_id
+    )
 
-    # results is a list of tuples (path_gwemopt_output, (path_ascii, obs_strategy_owncloud_url_folder))
-    path_ascii = [
-        path_ascii for _, (path_ascii, _) in results if path_ascii is not None
-    ]
-    owncloud_url = URL(results[0][1][1]).parent
-    if len(path_ascii) > 0:
-        # merge the galaxy targeting results into a single file named 'ALL.txt'
-        # and upload it to the ownCloud instance
-        merge_galaxy_file(
-            owncloud_config=owncloud_config,
-            obs_strategy_owncloud_url_folder=owncloud_url,
-            ascii_file_path=path_ascii,
-        )
+    with open(log_file_path, "a") as log_file:
+        with redirect_stdout(log_file), redirect_stderr(log_file):
+            logger.info("Starting gwemopt_post_task...")
+            logger.debug(f"Results: {results}")
+            # results is a list of tuples (path_gwemopt_output, (path_ascii, obs_strategy_owncloud_url_folder))
+            path_ascii = [
+                path_ascii for _, (path_ascii, _) in results if path_ascii is not None
+            ]
+            owncloud_url = URL(results[0][1][1]).parent
+            if len(path_ascii) > 0:
+                # merge the galaxy targeting results into a single file named 'ALL.txt'
+                # and upload it to the ownCloud instance
+                logger.info("Merging galaxy targeting results into a single file.")
+                merge_galaxy_file(
+                    owncloud_config=owncloud_config,
+                    obs_strategy_owncloud_url_folder=owncloud_url,
+                    ascii_file_path=path_ascii,
+                )
 
-    for _, path_gwemopt_output, _ in results:
-        folder_gwemopt_output = Path(path_gwemopt_output)
-        # remove the output directory after processing
-        if folder_gwemopt_output.exists() and folder_gwemopt_output.is_dir():
-            shutil.rmtree(folder_gwemopt_output)
+            logger.info("Cleaning up gwemopt output directories...")
+            for _, path_gwemopt_output, _ in results:
+                folder_gwemopt_output = Path(path_gwemopt_output)
+                # remove the output directory after processing
+                if folder_gwemopt_output.exists() and folder_gwemopt_output.is_dir():
+                    shutil.rmtree(folder_gwemopt_output)
+            logger.info("All gwemopt output directories cleaned up successfully.")
