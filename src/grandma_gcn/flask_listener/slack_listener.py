@@ -4,23 +4,22 @@ import json
 import logging
 import time
 
-from dotenv import dotenv_values
-from flask import Blueprint, abort, jsonify, request
+from flask import Blueprint, abort, current_app, g, jsonify, request
 
-# Configuration du logger
-logger = logging.getLogger("slack")
-logger.setLevel(logging.DEBUG)
-handler = logging.StreamHandler()
-formatter = logging.Formatter("[Slack] %(asctime)s - %(levelname)s - %(message)s")
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+from grandma_gcn.database.gw_db import GW_alert as GW_alert_DB
+from grandma_gcn.gcn_stream.automatic_gwemopt import automatic_gwemopt_process
+from grandma_gcn.gcn_stream.gw_alert import GW_alert
+from grandma_gcn.slackbot.gw_message import (
+    manual_gwemopt_notification,
+    new_alert_on_slack,
+)
 
 slack_bp = Blueprint("slack", __name__)
-env = dotenv_values(".env")
-SLACK_SECRET = env.get("SLACK_SIGNING_SECRET", "changeme")
 
 
 def verify_slack_request(req):
+    logger = logging.getLogger("slack")
+
     signature = req.headers.get("X-Slack-Signature", "")
     timestamp = req.headers.get("X-Slack-Request-Timestamp", "")
 
@@ -39,7 +38,7 @@ def verify_slack_request(req):
     my_signature = (
         "v0="
         + hmac.new(
-            SLACK_SECRET.encode(), base_string.encode(), hashlib.sha256
+            g.slack_secret.encode(), base_string.encode(), hashlib.sha256
         ).hexdigest()
     )
 
@@ -54,6 +53,8 @@ def verify_slack_request(req):
 
 @slack_bp.route("/actions", methods=["POST"])
 def handle_actions():
+    logger = logging.getLogger("slack")
+
     logger.info("Received POST to /api/slack/actions")
 
     if not verify_slack_request(request):
@@ -66,11 +67,61 @@ def handle_actions():
 
         action = payload["actions"][0]["action_id"]
         user = payload["user"]["username"]
+        user_id = payload["user"]["id"]
 
         logger.info(f"User `{user}` clicked button `{action}`")
 
-        # 👉 Traitement réel ici :
-        # lancer_observation_plan() ou envoyer à Celery
+        db_session = g.db
+
+        gw_alert_db = GW_alert_DB.get_by_message_ts(
+            db_session, payload["message"]["ts"]
+        )
+
+        gw_alert = GW_alert.from_db_model(
+            gw_alert_db, thresholds=current_app.config["GCN_CONFIG"]["THRESHOLD"]
+        )
+
+        logger.debug(f"Found GW alert in DB: {gw_alert_db}")
+        logger.debug(f"Converted GW alert: {gw_alert}")
+
+        if gw_alert_db.is_process_running:
+            response = g.slack_client.conversations_open(users=user_id)
+            channel_id = response["channel"]["id"]
+
+            text = (
+                f":warning: Alert *{gw_alert_db.triggerId}* has already been processed "
+                f"or is currently running.\n\n"
+                f"Please refer to <#{current_app.config['GCN_CONFIG']['Slack']['gw_alert_channel_id']}> for status and updates."
+            )
+
+            g.slack_client.chat_postMessage(channel=channel_id, text=text)
+
+            logger.info(
+                f"Alert {gw_alert_db.triggerId} is already being processed, skipping."
+            )
+            return jsonify(
+                {"text": f"Alert `{gw_alert_db.triggerId}` is already being processed."}
+            )
+
+        new_alert_on_slack(
+            gw_alert,
+            manual_gwemopt_notification,
+            g.slack_client,
+            channel=current_app.config["GCN_CONFIG"]["Slack"]["gw_alert_channel"],
+            logger=logger,
+            thread_ts=gw_alert_db.thread_ts,
+            user=user,
+        )
+
+        automatic_gwemopt_process(
+            current_app.config["GCN_CONFIG"],
+            gw_alert_db,
+            db_session,
+            current_app.config["GCN_CONFIG"]["THRESHOLD"],
+            current_app.config["GCN_CONFIG"]["Slack"]["gw_alert_channel"],
+            current_app.config["GCN_CONFIG"]["Slack"]["gw_alert_channel_id"],
+            logger,
+        )
 
         return jsonify(
             {"text": f"🛰️ Running observation plan as requested by `{user}`."}

@@ -224,7 +224,6 @@ def gwemopt_task(
     slack_channel: str,
     channel_id: str,
     owncloud_config: dict[str, Any],
-    owncloud_gwemopt_url: str,
     id_gw_alert_db: int,
     path_output: str,
     path_log: str,
@@ -267,8 +266,6 @@ def gwemopt_task(
         The Slack channel ID (used by the Slack API for posting images and threaded messages).
     owncloud_config : dict[str, Any]
         Configuration dictionary for the ownCloud client, containing credentials and connection info.
-    owncloud_gwemopt_url : str
-        The base URL for the ownCloud instance where results will be stored. Subfolders are created per event and strategy.
     id_gw_alert_db : int
         The ID of the GW alert in the database. This is used to retrieve the alert information.
     path_output : str
@@ -305,9 +302,7 @@ def gwemopt_task(
         f"gwemopt_task_{task_id}", Path(path_log), task_id
     )
 
-    # Initialize the ownCloud client and URL
-    owncloud_client = OwncloudClient(owncloud_config)
-    owncloud_gwemopt_url = URL(owncloud_gwemopt_url)
+    logger.debug(f"\n\n{obs_strategy}")
 
     obs_strategy: GW_alert.ObservationStrategy = (
         GW_alert.ObservationStrategy.from_string(obs_strategy)
@@ -318,13 +313,6 @@ def gwemopt_task(
         raise ValueError(
             "Observation strategy is set to GALAXYTARGETING but no galaxy catalog path or galaxy catalog provided."
         )
-
-    alert_url_subpart = owncloud_client.get_url_subpart(owncloud_gwemopt_url, 5)
-    obs_strategy_owncloud_path = (
-        alert_url_subpart + f"/{obs_strategy.name}_{"_".join(telescopes)}"
-    )
-    # create specific observation strategy owncloud folder
-    obs_strategy_owncloud_url_folder = owncloud_client.mkdir(obs_strategy_owncloud_path)
 
     start_task = Time.now()
     output_path = Path(path_output)
@@ -337,9 +325,21 @@ def gwemopt_task(
 
         # Retrieve the GW_alert from the database using the provided ID
         logger.info(f"Retrieving GW_alert with ID {id_gw_alert_db} from the database.")
-        gw_alert_db = session.query(GWDB_alert).get(id_gw_alert_db)
+        gw_alert_db: GWDB_alert = session.query(GWDB_alert).get(id_gw_alert_db)
         gw_alert = GW_alert.from_db_model(gw_alert_db, thresholds=threshold_config)
         logger.info(f"GW_alert {gw_alert.event_id} retrieved successfully.")
+
+        # Initialize the ownCloud client and URL
+        owncloud_client = OwncloudClient(owncloud_config)
+        owncloud_gwemopt_url = URL(gw_alert_db.owncloud_url)
+        alert_url_subpart = owncloud_client.get_url_subpart(owncloud_gwemopt_url, 5)
+        obs_strategy_owncloud_path = (
+            alert_url_subpart + f"/{obs_strategy.name}_{"_".join(telescopes)}"
+        )
+        # create specific observation strategy owncloud folder
+        obs_strategy_owncloud_url_folder = owncloud_client.mkdir(
+            obs_strategy_owncloud_path
+        )
 
         with open(log_file_path, "a") as log_file:
             with redirect_stdout(log_file), redirect_stderr(log_file):

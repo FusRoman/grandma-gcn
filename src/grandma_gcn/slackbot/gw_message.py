@@ -484,6 +484,36 @@ def build_gwemopt_results_message(
     return msg
 
 
+def manual_gwemopt_notification(
+    gw_alert: GW_alert,
+    user: str,
+) -> Message:
+    """
+    Build a message to notify that the GWEMOPT processing has been manually triggered.
+
+    Parameters
+    ----------
+    gw_alert : GW_alert
+        The GW alert object.
+    user : str
+        The username of the user who triggered the manual processing.
+
+    Returns
+    -------
+    Message
+        The message object containing the notification.
+    """
+    msg = Message()
+    msg.add_header(f"🛰️ Manual GWEMOPT processing for {gw_alert.event_id}")
+    msg.add_divider()
+    msg.add_elements(
+        BaseSection().add_elements(
+            MarkdownText(f"Triggered by: {user}"),
+        )
+    )
+    return msg
+
+
 def post_msg_on_slack(
     webclient: WebClient,
     channel: str,

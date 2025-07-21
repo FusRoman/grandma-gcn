@@ -14,8 +14,9 @@ class GW_alert(Base):
     thread_ts = Column(String, nullable=True)
     reception_count = Column(Integer, default=1, nullable=False)
     payload_json = Column(JSON, nullable=True)
-    message_ts = Column(String, nullable=True)
+    message_ts = Column(String, nullable=True, unique=True)
     is_process_running = Column(Boolean, default=False, nullable=False)
+    owncloud_url = Column(String, nullable=True, unique=True)
 
     def __repr__(self) -> str:
         excluded_fields = {"payload_json"}
@@ -57,6 +58,21 @@ class GW_alert(Base):
         self.message_ts = message_ts
         session.commit()
 
+    def set_owncloud_url(self, owncloud_url: str | None, session: Session):
+        """
+        Set the OwnCloud URL for the alert.
+        This method commits the change to the database.
+
+        Parameters
+        ----------
+        owncloud_url : str | None
+            The OwnCloud URL to set, or None to unset.
+        session : Session
+            SQLAlchemy session to use for the database operation.
+        """
+        self.owncloud_url = owncloud_url
+        session.commit()
+
     @classmethod
     def get_last_by_trigger_id(cls, session: Session, trigger_id: str) -> Self | None:
         """
@@ -77,6 +93,30 @@ class GW_alert(Base):
         return (
             session.query(GW_alert)
             .filter_by(triggerId=trigger_id)
+            .order_by(desc(GW_alert.reception_count))
+            .first()
+        )
+
+    @classmethod
+    def get_by_message_ts(cls, session: Session, message_ts: str) -> Self | None:
+        """
+        Retrieve the alert by its message timestamp.
+
+        Parameters
+        ----------
+        session : Session
+            SQLAlchemy session to use for the database operation.
+        message_ts : str
+            Message timestamp for the alert.
+
+        Returns
+        -------
+        GW_alert | None
+            The GW_alert database instance if found, otherwise None.
+        """
+        return (
+            session.query(GW_alert)
+            .filter_by(message_ts=message_ts)
             .order_by(desc(GW_alert.reception_count))
             .first()
         )
