@@ -141,3 +141,14 @@ def tiles() -> dict[str, Table]:
     ] = tiles["NOWT"] = tiles["OPD-1.6"] = tiles["Abastunami-T70"] = None
 
     return tiles
+
+
+@pytest.fixture(autouse=True)
+def patch_load_gcn_config(monkeypatch):
+    monkeypatch.setattr(
+        "grandma_gcn.flask_listener.app_factory.load_gcn_config",
+        lambda *a, **kw: {
+            "THRESHOLD": 0.5,
+            "Slack": {"gw_alert_channel": "C123", "gw_alert_channel_id": "C123id"},
+        },
+    )
