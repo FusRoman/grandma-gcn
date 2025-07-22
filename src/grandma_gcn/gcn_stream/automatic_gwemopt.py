@@ -101,5 +101,6 @@ def automatic_gwemopt_process(
     chord(gwemopt_tasks)(
         gwemopt_post_task.s(
             owncloud_config=gcn_stream_config["OWNCLOUD"],
+            path_log=gcn_stream_config["PATH"]["celery_task_log_path"],
         )
     )

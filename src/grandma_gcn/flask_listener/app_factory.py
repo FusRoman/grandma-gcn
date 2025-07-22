@@ -91,7 +91,7 @@ def create_app(config: dict = None) -> Flask:
 
     @app.route("/")
     def index():
-        return jsonify({"message": "Hello from Flask!"})
+        return jsonify({"message": "Hello from grandma-bot !"})
 
     @app.route("/db-ping")
     def db_ping():

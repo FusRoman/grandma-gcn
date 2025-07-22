@@ -45,7 +45,10 @@ def setup_task_logger(
         A tuple containing the logger and the path to the log file.
     """
     logger = logging.getLogger(f"gcn_stream.consumer.worker.{task_id}")
-    logger.setLevel(logging.INFO)
+
+    # Set the logger level to the same as the Celery logger
+    celery_logger = logging.getLogger("celery")
+    logger.setLevel(celery_logger.getEffectiveLevel())
 
     # Create a file handler for the task
     log_file = log_path / f"{task_name}_{task_id}.log"
@@ -531,13 +534,12 @@ def gwemopt_post_task(
     """
     task_id = current_task.request.id
     logger, log_file_path = setup_task_logger(
-        f"gwemopt_task_{task_id}", Path(path_log), task_id
+        f"gwemopt_post_task_{task_id}", Path(path_log), task_id
     )
 
     with open(log_file_path, "a") as log_file:
         with redirect_stdout(log_file), redirect_stderr(log_file):
             logger.info("Starting gwemopt_post_task...")
-            logger.debug(f"Results: {results}")
             # results is a list of tuples (path_gwemopt_output, (path_ascii, obs_strategy_owncloud_url_folder))
             path_ascii = [
                 path_ascii for _, (path_ascii, _) in results if path_ascii is not None
@@ -554,7 +556,8 @@ def gwemopt_post_task(
                 )
 
             logger.info("Cleaning up gwemopt output directories...")
-            for _, path_gwemopt_output, _ in results:
+            logger.info(f"\n\nResults: {results}\n\n")
+            for path_gwemopt_output, (_, _) in results:
                 folder_gwemopt_output = Path(path_gwemopt_output)
                 # remove the output directory after processing
                 if folder_gwemopt_output.exists() and folder_gwemopt_output.is_dir():
