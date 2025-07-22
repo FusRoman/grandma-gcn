@@ -274,3 +274,14 @@ def test_handle_actions_db_integration(client, monkeypatch, sqlite_engine_and_se
     # The channel and channel_id should match config
     assert call_args["args"][4] == "C123"
     assert call_args["args"][5] == "C123id"
+
+
+@pytest.fixture(autouse=True)
+def patch_load_gcn_config(monkeypatch):
+    monkeypatch.setattr(
+        "grandma_gcn.flask_listener.app_factory.load_gcn_config",
+        lambda *a, **kw: {
+            "THRESHOLD": 0.5,
+            "Slack": {"gw_alert_channel": "C123", "gw_alert_channel_id": "C123id"},
+        },
+    )
