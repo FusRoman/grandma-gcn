@@ -268,7 +268,7 @@ class GW_alert:
 
     def class_proba(self, cbc_class: CBC_proba) -> float | None:
         event_prop: dict[str, float] | None = self.event.get("classification", None)
-        if event_prop is None:
+        if event_prop is None or not event_prop:
             return None
         else:
             return event_prop.get(cbc_class.value, None)
@@ -486,6 +486,14 @@ class GW_alert:
                 | self.EventType.UPDATE
             ):
                 _, size_region, mean_dist, _ = self.get_error_region(0.9)
+
+                if self.event_class is None:
+                    msg = (
+                        "FA, it might be not an Astrophysical event, \n"
+                        "please wait for any retractation message in the next 30 min"
+                    )
+                    return score, msg, conclusion
+
                 match self.event_class:
                     case self.CBC_proba.Terrestrial:
                         msg = (

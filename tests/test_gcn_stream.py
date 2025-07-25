@@ -312,18 +312,18 @@ def test_main_restart_queue_argument(tmp_path, sqlite_engine_and_session):
     engine, session_local = sqlite_engine_and_session
     with (
         patch("grandma_gcn.gcn_stream.stream.init_logging") as mock_init_logging,
-        patch("grandma_gcn.gcn_stream.stream.init_db") as mock_init_db,
+        patch("grandma_gcn.gcn_stream.stream.get_engine") as mock_get_engine,
+        patch(
+            "grandma_gcn.gcn_stream.stream.get_session_local"
+        ) as mock_get_session_local,
         patch("grandma_gcn.gcn_stream.stream.GCNStream") as mock_gcnstream_cls,
-        patch("grandma_gcn.gcn_stream.stream.dotenv_values") as mock_dotenv_values,
     ):
         mock_logger = MagicMock()
         mock_init_logging.return_value = mock_logger
-        mock_init_db.return_value = (engine, session_local)
+        mock_get_engine.return_value = engine
+        mock_get_session_local.return_value = session_local
         mock_gcnstream = MagicMock()
         mock_gcnstream_cls.return_value = mock_gcnstream
-        mock_dotenv_values.return_value = {
-            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"
-        }
         # Test default (should be False)
         stream.main(gcn_config_path=str(fake_config_path))
         _, kwargs = mock_gcnstream_cls.call_args
@@ -332,6 +332,7 @@ def test_main_restart_queue_argument(tmp_path, sqlite_engine_and_session):
         stream.main(gcn_config_path=str(fake_config_path), restart_queue=True)
         _, kwargs = mock_gcnstream_cls.call_args
         assert kwargs.get("restart_queue", False) is True
+
 
 @pytest.mark.usefixtures("sqlite_engine_and_session")
 def test_handle_significant_alert_db_and_slack(
