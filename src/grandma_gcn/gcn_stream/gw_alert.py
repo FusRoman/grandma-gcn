@@ -253,7 +253,7 @@ class GW_alert:
     @property
     def event_class(self) -> CBC_proba | None:
         event_prop: dict[str, float] | None = self.event.get("classification", None)
-        if event_prop is None:
+        if event_prop is None or not event_prop:
             return None
         else:
             match max(event_prop, key=event_prop.get):

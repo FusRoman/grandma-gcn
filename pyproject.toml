@@ -1,6 +1,6 @@
 [project]
 name = "grandma-gcn"
-version = "8.2.0"
+version = "8.3.0"
 description = "Automated ingestion, analysis, and distribution of gravitational wave (GW) alerts for the GRANDMA collaboration. Provides real-time GCN alert processing, observation strategy generation (gwemopt), Slack and OwnCloud integration, and Celery-based automation."
 authors = [{ name = "Roman", email = "roman.lemontagner@gmail.com" }]
 dependencies = [
@@ -75,6 +75,7 @@ markers = [
     "e2e: run full processing from the slack message to the plan generation(deselect with '-m \"not e2e\"')",
     "e2e_light: run a lighter version that test only the GCN stream and the Slack message posting (deselect with '-m \"not e2e_light\"')",
 ]
+testpaths = ["tests"]
 
 [tool.pdm.scripts]
 test = 'pytest -m "not e2e and not e2e_light" --cov=grandma_gcn --cov-report=xml'
