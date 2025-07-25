@@ -139,23 +139,31 @@ def build_gwalert_data_msg(
     _, region_size_90, mean_distance, mean_sigma = gw_alert.get_error_region(0.9)
     _, region_size_50, _, _ = gw_alert.get_error_region(0.5)
 
-    class_event = gw_alert.event_class
-    others_class = [e for e in GW_alert.CBC_proba if e != class_event]
-    other_class_msg = "\n".join(
-        f"- {cbc_class.value} ({gw_alert.class_proba(cbc_class) * 100: .0f} %)"
-        for cbc_class in others_class
+    main_section = BaseSection().add_elements(
+        MarkdownText(
+            "*Event time:*\n{} UTC\n(Time since T0: {} seconds)".format(
+                gw_alert.get_event_time().iso, delta_t0_formatted
+            )
+        ),
     )
 
-    msg.add_elements(
-        BaseSection()
-        .add_elements(
+    class_event = gw_alert.event_class
+
+    if class_event is None:
+        main_section = main_section.add_elements(
             MarkdownText(
-                "*Event time:*\n{} UTC\n(Time since T0: {} seconds)".format(
-                    gw_alert.get_event_time().iso, delta_t0_formatted
-                )
-            ),
+                "*Event class:*\nNo classification available",
+            )
         )
-        .add_elements(
+    else:
+        # Get the other classes and their probabilities
+        # Exclude the class_event from the list of other classes
+        others_class = [e for e in GW_alert.CBC_proba if e != class_event]
+        other_class_msg = "\n".join(
+            f"- {cbc_class.value} ({gw_alert.class_proba(cbc_class) * 100: .0f} %)"
+            for cbc_class in others_class
+        )
+        main_section = main_section.add_elements(
             MarkdownText(
                 "*Preferred class:*\n{}({:.0f} %) {}".format(
                     class_event.value,
@@ -163,36 +171,33 @@ def build_gwalert_data_msg(
                     class_event.to_emoji(),
                 )
             ),
-        )
-        .add_elements(
+        ).add_elements(
             MarkdownText(f"*Other classes:*\n{other_class_msg}"),
         )
-        .add_elements(
-            MarkdownText(
-                "*Instruments:*\n{}".format(
-                    instruments_to_markdown(gw_alert.instruments)
-                )
-            ),
-        )
-        .add_elements(
-            MarkdownText(
-                "*Credible region size:*\n- 90% = {:.0f} deg²\n- 50% = {:.0f} deg²".format(
-                    region_size_90, region_size_50
-                )
-            ),
-        )
-        .add_elements(
-            MarkdownText(
-                "*Mean luminosity distance:*\n{:.0f} ± {:.0f} Mpc".format(
-                    mean_distance, mean_sigma
-                )
-            ),
-        )
-        .add_elements(
-            MarkdownText(f"*GRANDMA Score:* {score}"),
-        )
-        .add_elements(MarkdownText(f"*Decision time:* {action.value}")),
+
+    main_section.add_elements(
+        MarkdownText(
+            f"*Instruments:*\n{instruments_to_markdown(gw_alert.instruments)}"
+        ),
+    ).add_elements(
+        MarkdownText(
+            "*Credible region size:*\n- 90% = {:.0f} deg²\n- 50% = {:.0f} deg²".format(
+                region_size_90, region_size_50
+            )
+        ),
+    ).add_elements(
+        MarkdownText(
+            "*Mean luminosity distance:*\n{:.0f} ± {:.0f} Mpc".format(
+                mean_distance, mean_sigma
+            )
+        ),
+    ).add_elements(
+        MarkdownText(f"*GRANDMA Score:* {score}"),
+    ).add_elements(
+        MarkdownText(f"*Decision time:* {action.value}")
     )
+
+    msg.add_elements(main_section)
 
     msg.add_elements(
         RichTextElement().add_elements(

@@ -73,6 +73,10 @@ def test_e2e_grandma(mocker, logger):
     )
 
     push_message_for_test(
+        mocker, message_queue, "igwn.gwalert", "S250720j-preliminary.json"
+    )
+
+    push_message_for_test(
         mocker, message_queue, "igwn.gwalert", "S241102br-initial.json"
     )
 
@@ -171,6 +175,10 @@ def test_e2e_grandma_light(mocker, logger, tiles: dict[str, Table]):
 
     push_message_for_test(
         mocker, message_queue, "igwn.gwalert", "S250207bg-preliminary.json"
+    )
+
+    push_message_for_test(
+        mocker, message_queue, "igwn.gwalert", "S250720j-preliminary.json"
     )
 
     push_message_for_test(

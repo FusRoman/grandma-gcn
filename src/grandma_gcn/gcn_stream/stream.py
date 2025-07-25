@@ -110,7 +110,9 @@ def load_gcn_config(config_path: Path, logger: LoggerNewLine) -> dict[str, Any]:
     return toml_dict
 
 
-def main(gcn_config_path: str = "instance/gcn_config.toml") -> None:
+def main(
+    gcn_config_path: str = "instance/gcn_config.toml", restart_queue: bool = False
+) -> None:
     """
     Launch the GCN stream, an infinite loop waiting for notices from the GCN network.
     """
@@ -123,7 +125,7 @@ def main(gcn_config_path: str = "instance/gcn_config.toml") -> None:
 
     with session_local() as session:
         gcn_stream = GCNStream(
-            Path(gcn_config_path), engine, session, logger, restart_queue=True
+            Path(gcn_config_path), engine, session, logger, restart_queue=restart_queue
         )
         gcn_stream.run()
 
@@ -138,5 +140,11 @@ if __name__ == "__main__":  # pragma: no cover
         default="gcn_config.toml",
         help="Path to the GCN configuration file",
     )
+    parser.add_argument(
+        "--restart-queue",
+        action="store_true",
+        default=False,
+        help="Restart the polling of the GCN message queue from the beginning (offset 0)",
+    )
     args = parser.parse_args()
-    main(gcn_config_path=args.gcn_config_path)
+    main(gcn_config_path=args.gcn_config_path, restart_queue=args.restart_queue)

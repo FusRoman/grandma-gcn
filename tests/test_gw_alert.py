@@ -279,3 +279,10 @@ def test_integrated_surface_percentage(
 
     result = gw_alert_significant.integrated_surface_percentage(tiles["TCH"])
     assert result == pytest.approx(0.19985883021353368, rel=1e-4)
+
+
+def test_no_classification(S250720j_update: GW_alert):
+    event_class = S250720j_update.event_class
+    assert (
+        event_class is None
+    ), "Event class should be None when no classification is present"
