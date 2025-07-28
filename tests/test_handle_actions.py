@@ -94,7 +94,7 @@ def test_handle_actions_success(client, monkeypatch):
         lambda *a, **kw: True,
     )
     payload_dict = {
-        "actions": [{"action_id": "run_plan"}],
+        "actions": [{"action_id": "run_obs_plan"}],
         "user": {"username": "testuser", "id": "U123"},
         "message": {"ts": "123.456"},
     }
@@ -111,6 +111,7 @@ def test_handle_actions_success(client, monkeypatch):
     response = client.post(
         "/api/slack/actions", data=form_body.encode("utf-8"), headers=headers
     )
+    print(response.get_json())
     assert response.status_code == 200
     assert "Running observation plan" in response.get_json()["text"]
 
@@ -120,7 +121,7 @@ def test_handle_actions_invalid_signature(client):
     from urllib.parse import urlencode
 
     payload_dict = {
-        "actions": [{"action_id": "run_plan"}],
+        "actions": [{"action_id": "run_obs_plan"}],
         "user": {"username": "testuser", "id": "U123"},
         "message": {"ts": "123.456"},
     }
@@ -160,7 +161,7 @@ def test_handle_actions_exception(client, monkeypatch):
         lambda *a, **kw: True,
     )
     payload_dict = {
-        "actions": [{"action_id": "run_plan"}],
+        "actions": [{"action_id": "run_obs_plan"}],
         "user": {"username": "testuser", "id": "U123"},
         "message": {"ts": "123.456"},
     }
@@ -243,7 +244,7 @@ def test_handle_actions_db_integration(client, monkeypatch, sqlite_engine_and_se
 
     # --- Prepare payload ---
     payload_dict = {
-        "actions": [{"action_id": "run_plan"}],
+        "actions": [{"action_id": "run_obs_plan"}],
         "user": {"username": "testuser", "id": "U999"},
         "message": {"ts": "999.888"},
     }
@@ -274,3 +275,54 @@ def test_handle_actions_db_integration(client, monkeypatch, sqlite_engine_and_se
     # The channel and channel_id should match config
     assert call_args["args"][4] == "C123"
     assert call_args["args"][5] == "C123id"
+
+
+def test_handle_actions_ignored_action(client, monkeypatch):
+    """
+    Verify that the handler ignores actions with unexpected action_id.
+    """
+    # Patch verify_slack_request to always return True
+    monkeypatch.setattr(
+        "grandma_gcn.flask_listener.slack_listener.verify_slack_request",
+        lambda *a, **kw: True,
+    )
+
+    # Patch automatic_gwemopt_process to ensure it is NOT called
+    called = {}
+
+    def fake_automatic_gwemopt_process(*args, **kwargs):
+        called["was_called"] = True
+
+    monkeypatch.setattr(
+        "grandma_gcn.flask_listener.slack_listener.automatic_gwemopt_process",
+        fake_automatic_gwemopt_process,
+    )
+
+    # Payload with an action_id that should be ignored
+    payload_dict = {
+        "actions": [{"action_id": "some_other_action"}],
+        "user": {"username": "testuser", "id": "U123"},
+        "message": {"ts": "123.456"},
+    }
+    from urllib.parse import urlencode
+
+    payload = json.dumps(payload_dict, separators=(",", ":"))
+    form_body = urlencode({"payload": payload})
+    headers = {
+        "X-Slack-Signature": "any",
+        "X-Slack-Request-Timestamp": str(int(time.time())),
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+
+    # Call the endpoint
+    response = client.post(
+        "/api/slack/actions", data=form_body.encode("utf-8"), headers=headers
+    )
+
+    # Assert that the action was ignored
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "ignored" in data["text"].lower()
+
+    # Ensure automatic_gwemopt_process was NOT called
+    assert "was_called" not in called

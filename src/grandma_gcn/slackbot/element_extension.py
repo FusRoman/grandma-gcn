@@ -203,6 +203,23 @@ class URLButton:
         self.button["url"] = url
         return self
 
+    def add_action_id(self, action_id: str) -> Self:
+        """
+        Set the action ID for the button.
+
+        Parameters
+        ----------
+        action_id : str
+            The action ID to set.
+
+        Returns
+        -------
+        Self
+            The updated button element.
+        """
+        self.button["action_id"] = action_id
+        return self
+
 
 class Action:
     def __init__(self) -> None:

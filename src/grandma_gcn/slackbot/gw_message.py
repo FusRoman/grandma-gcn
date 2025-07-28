@@ -273,7 +273,7 @@ def build_gwalert_data_msg(
         obs_plan_button = URLButton(
             "Run Observation Plan",
             emoji=True,
-        )
+        ).add_action_id("run_obs_plan")
         msg.add_elements(
             Action().add_elements(obs_plan_button),
         )
