@@ -16,6 +16,8 @@ from grandma_gcn.slackbot.gw_message import (
 
 slack_bp = Blueprint("slack", __name__)
 
+ALLOWED_ACTIONS = ["run_obs_plan"]  # Run Observation Plan
+
 
 def verify_slack_request(req):
     logger = logging.getLogger("slack")
@@ -65,11 +67,15 @@ def handle_actions():
         payload = json.loads(request.form["payload"])
         logger.debug(f"Payload received: {json.dumps(payload, indent=2)}")
 
-        action = payload["actions"][0]["action_id"]
+        action_id = payload["actions"][0]["action_id"]
         user = payload["user"]["username"]
         user_id = payload["user"]["id"]
 
-        logger.info(f"User `{user}` clicked button `{action}`")
+        logger.info(f"User `{user}` clicked button `{action_id}`")
+
+        if action_id not in ALLOWED_ACTIONS:
+            logger.info(f"Ignored action `{action_id}`, not in {ALLOWED_ACTIONS}")
+            return jsonify({"text": f"Action `{action_id}` ignored."})
 
         db_session = g.db
 
