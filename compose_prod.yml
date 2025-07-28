@@ -67,6 +67,7 @@ services:
         "grandma_gcn.worker.celery_app",
         "worker",
         "--loglevel=DEBUG",
+        "--concurrency=6",
       ]
 
   db:
@@ -79,9 +80,64 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ./database:/var/lib/postgresql/data
       - ./scripts/init_grandma_gcn_db.sql:/docker-entrypoint-initdb.d/init.sql
+
+  flask_api:
+    image: grandma_gcn_app
+    env_file:
+      - .env
+    environment:
+      VIRTUAL_HOST: ${VIRTUAL_HOST}
+      LETSENCRYPT_HOST: ${LETSENCRYPT_HOST}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "${FLASK_PORT:-5000}:5000"
+    volumes:
+      - ./logs:/app/logs
+      - e2e_volume:/shared-tmp
+      - ./catalogs:/home/${USR}/code/catalogs
+      - ./.env:/home/${USR}/code/.env
+      - ./gunicorn_conf.py:/home/${USR}/code/gunicorn_conf.py
+    command:
+      [
+        "python",
+        "-m",
+        "gunicorn",
+        "-c",
+        "gunicorn_conf.py",
+        "grandma_gcn.flask_listener.app_factory:create_app()",
+      ]
+
+  # Nginx dynamic reverse proxy
+  nginx-proxy:
+    image: jwilder/nginx-proxy:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - certs:/etc/nginx/certs
+      - vhost:/etc/nginx/vhost.d
+      - html:/usr/share/nginx/html
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+
+  # Let's Encrypt companion for automatic TLS certificate generation
+  nginx-proxy-acme:
+    image: nginxproxy/acme-companion:latest
+    depends_on:
+      - nginx-proxy
+    volumes:
+      - certs:/etc/nginx/certs
+      - vhost:/etc/nginx/vhost.d
+      - html:/usr/share/nginx/html
+      - /var/run/docker.sock:/tmp/docker.sock:ro
 
 volumes:
   e2e_volume:
     name: "e2e_volume"
+  certs:
+  vhost:
+  html:

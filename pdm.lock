@@ -5,7 +5,7 @@
 groups = ["default", "lint", "test"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:15d5cbe5f851950bb5dada0b4c3754d4ae284ef89b3df3b768f71c8c7e37d8df"
+content_hash = "sha256:0c3237afd57e2de884a3d8193f81609e4c8749bb51ba25ba71a2f847bc716b1e"
 
 [[metadata.targets]]
 requires_python = ">=3.12"
@@ -973,6 +973,21 @@ files = [
     {file = "greenlet-3.2.3-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:86c2d68e87107c1792e2e8d5399acec2487a4e993ab76c792408e59394d52141"},
     {file = "greenlet-3.2.3-cp314-cp314-win_amd64.whl", hash = "sha256:8c47aae8fbbfcf82cc13327ae802ba13c9c36753b67e760023fd116bc124a62a"},
     {file = "greenlet-3.2.3.tar.gz", hash = "sha256:8b0dd8ae4c0d6f5e54ee55ba935eeb3d735a9b58a8a1e5b5cbab64e01a39f365"},
+]
+
+[[package]]
+name = "gunicorn"
+version = "23.0.0"
+requires_python = ">=3.7"
+summary = "WSGI HTTP Server for UNIX"
+groups = ["default"]
+dependencies = [
+    "importlib-metadata; python_version < \"3.8\"",
+    "packaging",
+]
+files = [
+    {file = "gunicorn-23.0.0-py3-none-any.whl", hash = "sha256:ec400d38950de4dfd418cff8328b2c8faed0edb0d517d3394e457c317908ca4d"},
+    {file = "gunicorn-23.0.0.tar.gz", hash = "sha256:f014447a0101dc57e294f6c18ca6b40227a4c90e9bdb586042628030cba004ec"},
 ]
 
 [[package]]
