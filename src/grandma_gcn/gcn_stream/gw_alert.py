@@ -25,6 +25,8 @@ from ligo.skymap.bayestar import rasterize
 from numpy import array, cumsum, float64, inf, isinf, logical_not, mean, ndarray, pi
 from spherical_geometry.polygon import SphericalPolygon
 
+from grandma_gcn.database.gw_db import GW_alert as DBGWAlert
+
 
 def bytes_to_dict(notice: bytes) -> dict:
     """
@@ -66,6 +68,27 @@ class GW_alert:
         self.thresholds = thresholds
 
         self.logger = logging.getLogger(f"gcn_stream.gw_alert_{self.event_id}")
+
+    @classmethod
+    def from_db_model(
+        cls, db_model: DBGWAlert, thresholds: dict[str, float | int]
+    ) -> Self:
+        """
+        Create a GW_alert instance from a database model.
+
+        Parameters
+        ----------
+        db_model : Any
+            The database model instance containing the notice.
+        thresholds : dict[str, float | int]
+            The thresholds for the event.
+
+        Returns
+        -------
+        GW_alert
+            An instance of GW_alert initialized with the database model data.
+        """
+        return cls(json.dumps(db_model.payload_json).encode("utf-8"), thresholds)
 
     @property
     def BBH_proba(self) -> float | None:
@@ -245,7 +268,7 @@ class GW_alert:
 
     def class_proba(self, cbc_class: CBC_proba) -> float | None:
         event_prop: dict[str, float] | None = self.event.get("classification", None)
-        if event_prop is None:
+        if event_prop is None or not event_prop:
             return None
         else:
             return event_prop.get(cbc_class.value, None)
@@ -463,6 +486,14 @@ class GW_alert:
                 | self.EventType.UPDATE
             ):
                 _, size_region, mean_dist, _ = self.get_error_region(0.9)
+
+                if self.event_class is None:
+                    msg = (
+                        "FA, it might be not an Astrophysical event, \n"
+                        "please wait for any retractation message in the next 30 min"
+                    )
+                    return score, msg, conclusion
+
                 match self.event_class:
                     case self.CBC_proba.Terrestrial:
                         msg = (

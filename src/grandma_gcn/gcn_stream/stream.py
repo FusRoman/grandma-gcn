@@ -2,12 +2,11 @@ from pathlib import Path
 from typing import Any
 
 import tomli
-from dotenv import dotenv_values
 from fink_utils.slack_bot.bot import init_slackbot
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from grandma_gcn.database.init_db import init_db
+from grandma_gcn.database.session import get_engine, get_session_local
 from grandma_gcn.gcn_stream.consumer import Consumer
 from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine, init_logging
 
@@ -48,7 +47,6 @@ class GCNStream:
 
         self.slack_client = init_slackbot(self.logger)
 
-        self.notice_path = Path(self._gcn_config["PATH"]["notice_path"])
         self.logger.info("GCN stream successfully initialized")
 
     @property
@@ -69,7 +67,7 @@ class GCNStream:
         """
         return self._session_local
 
-    def run(self, test: bool = False) -> None:
+    def run(self, test: bool = False, max_retries: int = 3600) -> None:
         """
         Run the polling infinite loop of the GCN stream with periodic configuration checks
         """
@@ -79,7 +77,7 @@ class GCNStream:
         self.logger.info("Starting GCN stream consumer")
         while True:
             self.logger.info("GCN stream consumer is active, waiting for messages...")
-            gcn_consumer.start_poll_loop(max_retries=3600)
+            gcn_consumer.start_poll_loop(max_retries=max_retries)
             if test:
                 break
 
@@ -111,23 +109,32 @@ def load_gcn_config(config_path: Path, logger: LoggerNewLine) -> dict[str, Any]:
 
 
 def main(
-    gcn_config_path: str = "instance/gcn_config.toml", restart_queue: bool = False
+    gcn_config_path: str = "instance/gcn_config.toml",
+    restart_queue: bool = False,
+    test: bool = False,
+    max_retries: int = 3600,
 ) -> None:
     """
     Launch the GCN stream, an infinite loop waiting for notices from the GCN network.
+
+    Parameters
+    ----------
+    gcn_config_path : str
+        Path to the GCN configuration file, by default "instance/gcn_config.toml"
+    test : bool, optional
+        If True, run the GCN stream in test mode, which will stop after one iteration
+        (useful for debugging), by default False
     """
     logger = init_logging(logger_name="gcn_stream")
 
-    # initialize the sql database connection
-    config = dotenv_values(".env")  # Load environment variables from .env file
-    DATABASE_URL = config["SQLALCHEMY_DATABASE_URI"]
-    engine, session_local = init_db(DATABASE_URL, logger=logger, echo=True)
+    session_local = get_session_local(Path(".env"))
+    engine = get_engine()
 
     with session_local() as session:
         gcn_stream = GCNStream(
             Path(gcn_config_path), engine, session, logger, restart_queue=restart_queue
         )
-        gcn_stream.run()
+        gcn_stream.run(test=test, max_retries=max_retries)
 
 
 if __name__ == "__main__":  # pragma: no cover

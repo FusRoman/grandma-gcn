@@ -98,7 +98,10 @@ def build_gwalert_notification_msg(gw_alert: GW_alert) -> Message:
 
 
 def build_gwalert_data_msg(
-    gw_alert: GW_alert, path_gw_alert: str, nb_alert_received: int
+    gw_alert: GW_alert,
+    path_gw_alert: str,
+    nb_alert_received: int,
+    add_obs_plan_button: bool = False,
 ) -> Message:
     """
     Build a message for the GW alert.
@@ -211,36 +214,31 @@ def build_gwalert_data_msg(
 
     skyportal_button = URLButton(
         f"SkyPortal - {gw_alert.event_id}",
-        f"https://skyportal-icare.ijclab.in2p3.fr/source/{gw_alert.event_id}",
         emoji=True,
-    )
+    ).add_url(f"https://skyportal-icare.ijclab.in2p3.fr/source/{gw_alert.event_id}")
 
     grace_db_button = URLButton(
         f"GraceDB - {gw_alert.event_id}",
-        gw_alert.gracedb_url,
         emoji=True,
-    )
+    ).add_url(gw_alert.gracedb_url)
 
     # Public URL (meaning not the WebDAV url used to make the requests) for the OwnCloud event folder
     url_owncloud_event = get_grandma_owncloud_public_url() + path_gw_alert
 
     owncloud_repo_button = URLButton(
         f"OwnCloud - {gw_alert.event_id}",
-        str(url_owncloud_event),
         emoji=True,
-    )
+    ).add_url(str(url_owncloud_event))
 
     owncloud_repo_image_button = URLButton(
         "OwnCloud - Image",
-        str(url_owncloud_event + "/IMAGES"),
         emoji=True,
-    )
+    ).add_url(str(url_owncloud_event + "/IMAGES"))
 
     owncloud_repo_photometry_button = URLButton(
         "OwnCloud - Photometry",
-        str(url_owncloud_event + "/LOGBOOK"),
         emoji=True,
-    )
+    ).add_url(str(url_owncloud_event + "/LOGBOOK"))
 
     msg.add_elements(
         Action()
@@ -262,6 +260,33 @@ def build_gwalert_data_msg(
     )
 
     msg.add_divider()
+
+    if add_obs_plan_button:
+        # the observation plan has not been run automatically, so we add a button to run it
+        msg.add_elements(
+            BaseSection().add_elements(
+                MarkdownText(
+                    ":warning: *Warning:*\n*The observation plan _has not been triggered_ automatically.*\nYou can run it manually by clicking the button below."
+                )
+            )
+        )
+        obs_plan_button = URLButton(
+            "Run Observation Plan",
+            emoji=True,
+        )
+        msg.add_elements(
+            Action().add_elements(obs_plan_button),
+        )
+        msg.add_divider()
+    else:
+        # the observation plan has been run automatically, so we just inform the user
+        msg.add_elements(
+            BaseSection().add_elements(
+                MarkdownText(
+                    "ℹ️ *Note:*\n *The observation plan _has been triggered_ automatically.*\nYou will find the results in the OwnCloud folder and in the message thread below."
+                ),
+            )
+        )
 
     return msg
 
@@ -448,15 +473,44 @@ def build_gwemopt_results_message(
     url_owncloud_gwemopt_results = get_grandma_owncloud_public_url() + path_gw_alert
     owncloud_repo_button = URLButton(
         f"OwnCloud - {gw_alert.event_id}",
-        str(url_owncloud_gwemopt_results),
         emoji=True,
-    )
+    ).add_url(str(url_owncloud_gwemopt_results))
     msg.add_elements(
         Action().add_elements(
             owncloud_repo_button,
         )
     )
 
+    return msg
+
+
+def manual_gwemopt_notification(
+    gw_alert: GW_alert,
+    user: str,
+) -> Message:
+    """
+    Build a message to notify that the GWEMOPT processing has been manually triggered.
+
+    Parameters
+    ----------
+    gw_alert : GW_alert
+        The GW alert object.
+    user : str
+        The username of the user who triggered the manual processing.
+
+    Returns
+    -------
+    Message
+        The message object containing the notification.
+    """
+    msg = Message()
+    msg.add_header(f"🛰️ Manual GWEMOPT processing for {gw_alert.event_id}")
+    msg.add_divider()
+    msg.add_elements(
+        BaseSection().add_elements(
+            MarkdownText(f"Triggered by: {user}"),
+        )
+    )
     return msg
 
 

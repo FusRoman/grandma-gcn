@@ -186,3 +186,4 @@ scripts/delete_grand_gcn.sh
 scripts/init_grandma_gcn_vm.sh
 test_db_connexion.py
 test_galaxy_tables.py
+slack_response/

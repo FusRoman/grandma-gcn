@@ -8,8 +8,10 @@ from astropy.table import Table
 from astropy.time import Time
 from celery import current_task
 from fink_utils.slack_bot.bot import init_slackbot
+from sqlalchemy.orm import Session
 from yarl import URL
 
+from grandma_gcn.database.gw_db import GW_alert as GWDB_alert
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 from grandma_gcn.slackbot.gw_message import (
     build_gwemopt_message,
@@ -17,7 +19,7 @@ from grandma_gcn.slackbot.gw_message import (
     new_alert_on_slack,
     post_image_on_slack,
 )
-from grandma_gcn.worker.celery_app import celery
+from grandma_gcn.worker.celery_app import celery, with_session
 from grandma_gcn.worker.gwemopt_init import GalaxyCatalog, init_gwemopt
 from grandma_gcn.worker.owncloud_client import OwncloudClient
 
@@ -43,7 +45,10 @@ def setup_task_logger(
         A tuple containing the logger and the path to the log file.
     """
     logger = logging.getLogger(f"gcn_stream.consumer.worker.{task_id}")
-    logger.setLevel(logging.INFO)
+
+    # Set the logger level to the same as the Celery logger
+    celery_logger = logging.getLogger("celery")
+    logger.setLevel(celery_logger.getEffectiveLevel())
 
     # Create a file handler for the task
     log_file = log_path / f"{task_name}_{task_id}.log"
@@ -213,15 +218,16 @@ def push_gwemopt_product_on_owncloud(
 
 
 @celery.task(name="gwemopt_task")
+@with_session
 def gwemopt_task(
+    session: Session,
     telescopes: list[str],
     nb_tiles: list[int],
     nside: int,
     slack_channel: str,
     channel_id: str,
     owncloud_config: dict[str, Any],
-    owncloud_gwemopt_url: str,
-    path_notice: str,
+    id_gw_alert_db: int,
     path_output: str,
     path_log: str,
     threshold_config: dict[str, float | int],
@@ -229,7 +235,7 @@ def gwemopt_task(
     alert_thread_ts: str | None = None,
     path_galaxy_catalog: str | None = None,
     galaxy_catalog: str | None = None,
-) -> None:
+) -> tuple[str, tuple[str, str]]:
     """
     Task to process a GCN (General Coordinates Network) notice and generate observation plans using the GWEMOPT package for the GRANDMA collaboration.
 
@@ -249,6 +255,8 @@ def gwemopt_task(
 
     Parameters
     ----------
+    session : Session
+        SQLAlchemy session for database interactions. This is used to retrieve the GW alert from the database.
     telescopes : list[str]
         List of telescope names to use for the observation plan. Each telescope will receive a tailored tiling.
     nb_tiles : list[int]
@@ -261,10 +269,8 @@ def gwemopt_task(
         The Slack channel ID (used by the Slack API for posting images and threaded messages).
     owncloud_config : dict[str, Any]
         Configuration dictionary for the ownCloud client, containing credentials and connection info.
-    owncloud_gwemopt_url : str
-        The base URL for the ownCloud instance where results will be stored. Subfolders are created per event and strategy.
-    path_notice : str
-        Path to the GCN notice file (JSON format) to be processed.
+    id_gw_alert_db : int
+        The ID of the GW alert in the database. This is used to retrieve the alert information.
     path_output : str
         Path to the output directory where GWEMOPT products (plots, data files) will be written.
     path_log : str
@@ -280,6 +286,12 @@ def gwemopt_task(
     galaxy_catalog : str | None, optional
         The galaxy catalog to use (as a string identifier or object). Required for galaxy-targeted tiling.
 
+    Returns
+    -------
+    tuple[str, tuple[str, str]]
+        - The path to the output directory where the results are stored.
+        - A tuple containing the path to the galaxy tiles (if applicable) and the ownCloud URL where the results are stored.
+
     Notes
     -----
     - The task is robust to missing or malformed input, and logs errors for debugging.
@@ -288,9 +300,12 @@ def gwemopt_task(
     - For galaxy-targeted tiling, a post-processing step merges all ASCII tables into a single file for the collaboration.
     """
 
-    # Initialize the ownCloud client and URL
-    owncloud_client = OwncloudClient(owncloud_config)
-    owncloud_gwemopt_url = URL(owncloud_gwemopt_url)
+    task_id = current_task.request.id
+    logger, log_file_path = setup_task_logger(
+        f"gwemopt_task_{task_id}", Path(path_log), task_id
+    )
+
+    logger.debug(f"\n\n{obs_strategy}")
 
     obs_strategy: GW_alert.ObservationStrategy = (
         GW_alert.ObservationStrategy.from_string(obs_strategy)
@@ -302,35 +317,31 @@ def gwemopt_task(
             "Observation strategy is set to GALAXYTARGETING but no galaxy catalog path or galaxy catalog provided."
         )
 
-    alert_url_subpart = owncloud_client.get_url_subpart(owncloud_gwemopt_url, 5)
-    obs_strategy_owncloud_path = (
-        alert_url_subpart + f"/{obs_strategy.name}_{"_".join(telescopes)}"
-    )
-    # create specific observation strategy owncloud folder
-    obs_strategy_owncloud_url_folder = owncloud_client.mkdir(obs_strategy_owncloud_path)
-
     start_task = Time.now()
-    task_id = current_task.request.id
-    path_notice = Path(path_notice)
     output_path = Path(path_output)
     path_galaxy_catalog = Path(path_galaxy_catalog) if path_galaxy_catalog else None
     galaxy_catalog = (
         GalaxyCatalog.from_string(galaxy_catalog) if galaxy_catalog else None
     )
 
-    # temporary logger in case of a failure before the logger is set up
-    logger = logging.getLogger("gwemopt_task")
-
     try:
-        with open(path_notice, "rb") as fp:
-            json_byte = fp.read()
 
-        gw_alert = GW_alert(
-            json_byte, thresholds=threshold_config
-        )  # Configure a logger specific to this task
+        # Retrieve the GW_alert from the database using the provided ID
+        logger.info(f"Retrieving GW_alert with ID {id_gw_alert_db} from the database.")
+        gw_alert_db: GWDB_alert = session.query(GWDB_alert).get(id_gw_alert_db)
+        gw_alert = GW_alert.from_db_model(gw_alert_db, thresholds=threshold_config)
+        logger.info(f"GW_alert {gw_alert.event_id} retrieved successfully.")
 
-        logger, log_file_path = setup_task_logger(
-            f"gwemopt_task_{gw_alert.event_id}", Path(path_log), task_id
+        # Initialize the ownCloud client and URL
+        owncloud_client = OwncloudClient(owncloud_config)
+        owncloud_gwemopt_url = URL(gw_alert_db.owncloud_url)
+        alert_url_subpart = owncloud_client.get_url_subpart(owncloud_gwemopt_url, 5)
+        obs_strategy_owncloud_path = (
+            alert_url_subpart + f"/{obs_strategy.name}_{"_".join(telescopes)}"
+        )
+        # create specific observation strategy owncloud folder
+        obs_strategy_owncloud_url_folder = owncloud_client.mkdir(
+            obs_strategy_owncloud_path
         )
 
         with open(log_file_path, "a") as log_file:
@@ -456,7 +467,6 @@ def gwemopt_task(
         else None
     )
     return (
-        str(path_notice),
         str(output_path),
         (path_galaxy_tiles, str(obs_strategy_owncloud_url_folder)),
     )
@@ -505,7 +515,9 @@ def merge_galaxy_file(
 
 @celery.task(name="gwemopt_post_task")
 def gwemopt_post_task(
-    results: tuple[str, str, tuple[str, str]], owncloud_config: dict[str, Any]
+    results: tuple[str, str, tuple[str, str]],
+    owncloud_config: dict[str, Any],
+    path_log: str,
 ) -> None:
     """
     Task to clean up after the gwemopt task has completed.
@@ -520,27 +532,34 @@ def gwemopt_post_task(
     path_log : str
         Path to the log directory where the task logs will be stored.
     """
+    task_id = current_task.request.id
+    logger, log_file_path = setup_task_logger(
+        f"gwemopt_post_task_{task_id}", Path(path_log), task_id
+    )
 
-    # results is a list of tuples (path_notice, path_gwemopt_output, (path_ascii, obs_strategy_owncloud_url_folder))
-    path_ascii = [
-        path_ascii for _, _, (path_ascii, _) in results if path_ascii is not None
-    ]
-    owncloud_url = URL(results[0][2][1]).parent
-    if len(path_ascii) > 0:
-        # merge the galaxy targeting results into a single file named 'ALL.txt'
-        # and upload it to the ownCloud instance
-        merge_galaxy_file(
-            owncloud_config=owncloud_config,
-            obs_strategy_owncloud_url_folder=owncloud_url,
-            ascii_file_path=path_ascii,
-        )
+    with open(log_file_path, "a") as log_file:
+        with redirect_stdout(log_file), redirect_stderr(log_file):
+            logger.info("Starting gwemopt_post_task...")
+            # results is a list of tuples (path_gwemopt_output, (path_ascii, obs_strategy_owncloud_url_folder))
+            path_ascii = [
+                path_ascii for _, (path_ascii, _) in results if path_ascii is not None
+            ]
+            owncloud_url = URL(results[0][1][1]).parent
+            if len(path_ascii) > 0:
+                # merge the galaxy targeting results into a single file named 'ALL.txt'
+                # and upload it to the ownCloud instance
+                logger.info("Merging galaxy targeting results into a single file.")
+                merge_galaxy_file(
+                    owncloud_config=owncloud_config,
+                    obs_strategy_owncloud_url_folder=owncloud_url,
+                    ascii_file_path=path_ascii,
+                )
 
-    path_notice = Path(results[0][0])
-    # remove the notice file after processing
-    path_notice.unlink()
-
-    for _, path_gwemopt_output, _ in results:
-        folder_gwemopt_output = Path(path_gwemopt_output)
-        # remove the output directory after processing
-        if folder_gwemopt_output.exists() and folder_gwemopt_output.is_dir():
-            shutil.rmtree(folder_gwemopt_output)
+            logger.info("Cleaning up gwemopt output directories...")
+            logger.info(f"\n\nResults: {results}\n\n")
+            for path_gwemopt_output, (_, _) in results:
+                folder_gwemopt_output = Path(path_gwemopt_output)
+                # remove the output directory after processing
+                if folder_gwemopt_output.exists() and folder_gwemopt_output.is_dir():
+                    shutil.rmtree(folder_gwemopt_output)
+            logger.info("All gwemopt output directories cleaned up successfully.")
