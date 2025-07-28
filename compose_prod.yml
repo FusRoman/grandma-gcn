@@ -96,8 +96,8 @@ services:
     depends_on:
       - db
       - redis
-    ports:
-      - "${FLASK_PORT:-5000}:5000"
+    expose:
+      - "5000"
     restart: unless-stopped
     volumes:
       - ./logs:/app/logs
@@ -117,6 +117,7 @@ services:
 
   # Nginx dynamic reverse proxy
   nginx-proxy:
+    container_name: ${NGINX_PROXY_NAME}
     image: jwilder/nginx-proxy:latest
     ports:
       - "80:80"
@@ -129,9 +130,12 @@ services:
 
   # Let's Encrypt companion for automatic TLS certificate generation
   nginx-proxy-acme:
+    container_name: nginx-proxy-acme-grandma
     image: nginxproxy/acme-companion:latest
     depends_on:
       - nginx-proxy
+    environment:
+      - NGINX_PROXY_CONTAINER=${NGINX_PROXY_NAME}
     volumes:
       - certs:/etc/nginx/certs
       - vhost:/etc/nginx/vhost.d
