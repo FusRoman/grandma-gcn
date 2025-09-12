@@ -163,6 +163,7 @@ class GW_alert:
         PRELIMINARY = "PRELIMINARY"
         INITIAL = "INITIAL"
         UPDATE = "UPDATE"
+        EARLYWARNING = "EARLYWARNING"
 
         def to_emoji(self) -> str:
             """
@@ -204,6 +205,8 @@ class GW_alert:
                 return self.EventType.INITIAL
             case "UPDATE":
                 return self.EventType.UPDATE
+            case "EARLYWARNING":
+                return self.EventType.EARLYWARNING
             case _:
                 return None
 
@@ -484,6 +487,7 @@ class GW_alert:
                 self.EventType.PRELIMINARY
                 | self.EventType.INITIAL
                 | self.EventType.UPDATE
+                | self.EventType.EARLYWARNING
             ):
                 _, size_region, mean_dist, _ = self.get_error_region(0.9)
 

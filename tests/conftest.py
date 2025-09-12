@@ -120,6 +120,12 @@ def S250720j_update(path_tests, threshold_config) -> GW_alert:
 
 
 @pytest.fixture
+def S250910b_earlywarning(path_tests, threshold_config) -> GW_alert:
+    bytes_notice = open_notice_file(path_tests, "S250910b-earlywarning.json")
+    return GW_alert(bytes_notice, thresholds=threshold_config)
+
+
+@pytest.fixture
 def owncloud_client(gcn_config_path, logger):
     """
     Fixture to create an instance of OwncloudClient

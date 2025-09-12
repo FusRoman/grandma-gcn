@@ -55,6 +55,30 @@ def test_gw_alert_significant(gw_alert_significant: GW_alert):
     ]
 
 
+def test_gw_alert_earlywarning(S250910b_earlywarning: GW_alert):
+    assert S250910b_earlywarning.event_id == "S250910b"
+    assert S250910b_earlywarning.event_type == GW_alert.EventType.EARLYWARNING
+    assert S250910b_earlywarning.event_time == Time(
+        "2025-09-10T00:07:57.245Z", format="isot"
+    )
+    assert S250910b_earlywarning.far == 5.576763716878162e-08
+    assert S250910b_earlywarning.has_NS == 1.0
+    assert S250910b_earlywarning.is_significant
+
+    assert S250910b_earlywarning.event_class == GW_alert.CBC_proba.BNS
+    assert S250910b_earlywarning.is_real_observation
+
+    _, size, mean_dist, mean_sigma = S250910b_earlywarning.get_error_region(0.9)
+    assert size == pytest.approx(9571.30472998815)
+    assert mean_dist == pytest.approx(105.13643959034928)
+    assert mean_sigma == pytest.approx(44.96660012659916)
+
+    assert S250910b_earlywarning.instruments == [
+        GW_alert.Instrument.H1,
+        GW_alert.Instrument.L1,
+    ]
+
+
 def test_S241102_initial(S241102_initial: GW_alert):
     assert S241102_initial.event_id == "S241102br"
     assert S241102_initial.event_type == GW_alert.EventType.INITIAL
