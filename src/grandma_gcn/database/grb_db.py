@@ -77,10 +77,10 @@ class GRB_alert(Base):
 
     @classmethod
     def get_by_trigger_id_and_packet_type(
-        cls, session: Session, trigger_id: str, packet_type: int
+        cls, session: Session, trigger_id: str, packet_type: int, get_first: bool = False
     ) -> Self | None:
         """
-        Retrieve the most recent alert by trigger ID and packet type.
+        Retrieve an alert by trigger ID and packet type.
 
         Parameters
         ----------
@@ -90,17 +90,47 @@ class GRB_alert(Base):
             Unique identifier for the alert.
         packet_type : int
             Packet type number (e.g., 61 for BAT_POS_ACK, 67 for XRT).
+        get_first : bool
+            If True, get the first (oldest) alert. If False, get the most recent. Default False.
 
         Returns
         -------
         GRB_alert | None
             The GRB_alert database instance if found, otherwise None.
         """
+        query = session.query(GRB_alert).filter_by(triggerId=trigger_id, packet_type=packet_type)
+
+        if get_first:
+            # Get oldest alert (first arrival)
+            return query.order_by(GRB_alert.id_grb).first()
+        else:
+            # Get most recent alert (last arrival)
+            return query.order_by(desc(GRB_alert.id_grb)).first()
+
+    @classmethod
+    def get_all_by_trigger_id(
+        cls, session: Session, trigger_id: str
+    ) -> list[Self]:
+        """
+        Retrieve all alerts for a given trigger ID, ordered by arrival time.
+
+        Parameters
+        ----------
+        session : Session
+            SQLAlchemy session to use for the database operation.
+        trigger_id : str
+            Unique identifier for the alert.
+
+        Returns
+        -------
+        list[GRB_alert]
+            List of GRB_alert instances ordered by id_grb (arrival order).
+        """
         return (
             session.query(GRB_alert)
-            .filter_by(triggerId=trigger_id, packet_type=packet_type)
-            .order_by(desc(GRB_alert.id_grb))
-            .first()
+            .filter_by(triggerId=trigger_id)
+            .order_by(GRB_alert.id_grb)
+            .all()
         )
 
     def increment_reception_count(self, session: Session):

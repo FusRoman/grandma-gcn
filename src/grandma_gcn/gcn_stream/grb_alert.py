@@ -291,6 +291,45 @@ class GRB_alert:
         return f"https://skyportal-icare.ijclab.in2p3.fr/source/{self.trigger_id}"
 
     @property
+    def grb_name(self) -> str:
+        """
+        Get or generate the GRB name.
+        For Swift: Extracts from <Why><Inference><Name> (e.g., "GRB 251214")
+        For SVOM: Generates from trigger date in YYMMDD format (e.g., "251208")
+
+        Returns
+        -------
+        str
+            GRB name in YYMMDD format
+        """
+        try:
+            # For Swift: try to extract from Why/Inference/Name
+            if hasattr(self.voevent, "Why") and hasattr(self.voevent.Why, "Inference"):
+                if hasattr(self.voevent.Why.Inference, "Name"):
+                    name = str(self.voevent.Why.Inference.Name)
+                    # Extract just the date part "GRB 251214" -> "251214"
+                    if name.startswith("GRB "):
+                        return name.replace("GRB ", "").strip()
+                    return name.strip()
+
+            # For SVOM or if no Why section: generate from trigger date in YYMMDD format
+            event_time = vp.get_event_time_as_utc(self.voevent)
+            if event_time:
+                return event_time.strftime("%y%m%d")
+
+            return "UNKNOWN"
+        except Exception as e:
+            self.logger.warning(f"Error extracting GRB name: {e}")
+            # Try to generate from trigger date as fallback
+            try:
+                event_time = vp.get_event_time_as_utc(self.voevent)
+                if event_time:
+                    return event_time.strftime("%y%m%d")
+            except Exception:
+                pass
+            return "UNKNOWN"
+
+    @property
     def slew_status(self) -> str | None:
         """
         Get the slew status for SVOM alerts.
@@ -310,6 +349,114 @@ class GRB_alert:
         except Exception as e:
             self.logger.warning(f"Error extracting slew status: {e}")
             return None
+
+    @property
+    def rate_signif(self) -> str:
+        """
+        Get the Rate_Signif parameter formatted with one decimal place.
+        For Swift: From top-level params in BAT packet
+        For SVOM: From SNR in Detection_Info if Trigger_Type is "CRT", else "NA"
+
+        Returns
+        -------
+        str
+            Rate significance value with unit (e.g., "22.0 sigma") or "NA"
+        """
+        try:
+            top_params = vp.get_toplevel_params(self.voevent)
+            if "Rate_Signif" in top_params:
+                value = float(top_params["Rate_Signif"]["value"])
+                unit = top_params["Rate_Signif"].get("unit", "")
+                formatted_value = f"{value:.1f}"
+                return f"{formatted_value} {unit}".strip() if unit else formatted_value
+
+            # For SVOM: check Detection_Info group
+            grouped_params = vp.get_grouped_params(self.voevent)
+            if "Detection_Info" in grouped_params:
+                det_info = grouped_params["Detection_Info"]
+                # If Trigger_Type is CRT, then SNR is rate_signif
+                if "Trigger_Type" in det_info and det_info["Trigger_Type"]["value"] == "CRT":
+                    if "SNR" in det_info:
+                        value = float(det_info["SNR"]["value"])
+                        unit = det_info["SNR"].get("unit", "")
+                        formatted_value = f"{value:.1f}"
+                        return f"{formatted_value} {unit}".strip() if unit else formatted_value
+
+            return "NA"
+        except Exception as e:
+            self.logger.warning(f"Error extracting rate_signif: {e}")
+            return "NA"
+
+    @property
+    def image_signif(self) -> str:
+        """
+        Get the Image_Signif parameter formatted with one decimal place.
+        For Swift: From top-level params in BAT packet
+        For SVOM: From SNR in Detection_Info if Trigger_Type is "IMT", else "NA"
+
+        Returns
+        -------
+        str
+            Image significance value with unit (e.g., "8.6 sigma") or "NA"
+        """
+        try:
+            top_params = vp.get_toplevel_params(self.voevent)
+            if "Image_Signif" in top_params:
+                value = float(top_params["Image_Signif"]["value"])
+                unit = top_params["Image_Signif"].get("unit", "")
+                formatted_value = f"{value:.1f}"
+                return f"{formatted_value} {unit}".strip() if unit else formatted_value
+
+            # For SVOM: check Detection_Info group
+            grouped_params = vp.get_grouped_params(self.voevent)
+            if "Detection_Info" in grouped_params:
+                det_info = grouped_params["Detection_Info"]
+                # If Trigger_Type is IMT, then SNR is image_signif
+                if "Trigger_Type" in det_info and det_info["Trigger_Type"]["value"] == "IMT":
+                    if "SNR" in det_info:
+                        value = float(det_info["SNR"]["value"])
+                        unit = det_info["SNR"].get("unit", "")
+                        formatted_value = f"{value:.1f}"
+                        return f"{formatted_value} {unit}".strip() if unit else formatted_value
+
+            return "NA"
+        except Exception as e:
+            self.logger.warning(f"Error extracting image_signif: {e}")
+            return "NA"
+
+    @property
+    def trigger_dur(self) -> str:
+        """
+        Get the trigger duration formatted with one decimal place.
+        For SVOM: From Timescale parameter in Detection_Info group
+        For Swift: From Integ_Time parameter
+
+        Returns
+        -------
+        str
+            Trigger duration with unit (e.g., "81.9 s") or "NA"
+        """
+        try:
+            # For SVOM: check Detection_Info group for Timescale
+            grouped_params = vp.get_grouped_params(self.voevent)
+            if "Detection_Info" in grouped_params:
+                det_info = grouped_params["Detection_Info"]
+                if "Timescale" in det_info:
+                    value = float(det_info["Timescale"]["value"])
+                    unit = det_info["Timescale"].get("unit", "s")
+                    return f"{value:.1f} {unit}"
+
+            # For Swift: check for duration-related parameters
+            top_params = vp.get_toplevel_params(self.voevent)
+            if "Integ_Time" in top_params:
+                value = float(top_params["Integ_Time"]["value"])
+                unit = top_params["Integ_Time"].get("unit", "s")
+                return f"{value:.1f} {unit}"
+
+            return "NA"
+        except Exception as e:
+            self.logger.warning(f"Error extracting trigger_dur: {e}")
+            return "NA"
 
     def should_process_alert(self) -> bool:
         """
@@ -334,7 +481,7 @@ class GRB_alert:
         mission = self.mission
         packet_type = self.packet_type
 
-        # SVOM: only accept packet types 202 (initial), 204 (slewing accepted), 205 (slewing rejected)
+        # SVOM: accept packet types 202 (initial), 204 (slewing accepted), 205 (slewing rejected), 209 (MXT position)
         if mission == Mission.SVOM:
             if packet_type is None:
                 self.logger.warning(
@@ -342,7 +489,7 @@ class GRB_alert:
                 )
                 return False
 
-            accepted_types = {202, 204, 205}
+            accepted_types = {202, 204, 205, 209}
 
             if packet_type in accepted_types:
                 self.logger.info(
@@ -355,7 +502,7 @@ class GRB_alert:
                 )
                 return False
 
-        # Swift: BAT_GRB_POS_ACK (61) and XRT_POSITION (67)
+        # Swift: BAT_GRB_POS_ACK (61), XRT_POSITION (67), and UVOT_POSITION (81)
         if mission == Mission.SWIFT:
             if packet_type is None:
                 self.logger.warning(
@@ -363,7 +510,7 @@ class GRB_alert:
                 )
                 return False
 
-            accepted_types = {61, 67}
+            accepted_types = {61, 67, 81}
 
             if packet_type in accepted_types:
                 self.logger.info(

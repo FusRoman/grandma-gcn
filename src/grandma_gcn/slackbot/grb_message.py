@@ -13,18 +13,65 @@ from grandma_gcn.slackbot.element_extension import (
 )
 
 
+def _build_position_update_message(
+    grb_name: str, position_type: str, ra: str, dec: str, uncertainty: str | None = None
+) -> Message:
+    """
+    Helper function to build a position update message.
+
+    Parameters
+    ----------
+    grb_name : str
+        The GRB name
+    position_type : str
+        Type of position update (e.g., "XRT Position updated", "MXT Position", "Optical counterpart found by Swift/UVOT")
+    ra : str
+        Right Ascension
+    dec : str
+        Declination
+    uncertainty : str | None
+        Uncertainty in arcmin (optional, not shown if None)
+
+    Returns
+    -------
+    Message
+        A formatted Slack message for the position update
+    """
+    msg = Message()
+
+    # Build message text
+    if uncertainty:
+        message_text = (
+            f"• *{position_type}:* RA {ra}, DEC {dec} "
+            f"(UNC: {uncertainty} arcmin)"
+        )
+    else:
+        message_text = f"• *{position_type}*\n• *Position:* RA {ra}, DEC {dec}"
+
+    msg.add_header(f"Update: {'Swift' if 'Swift' in position_type or 'XRT' in position_type or 'UVOT' in position_type else 'SVOM'} GRB {grb_name}")
+    msg.add_divider()
+    msg.add_elements(BaseSection().add_text(MarkdownText(message_text)))
+
+    return msg
+
+
 def build_svom_alert_msg(grb_alert: GRB_alert, **kwargs) -> Message:
     """
     Build a Slack message for an SVOM GRB alert.
 
-    Shows packet type (202=Initial, 204=Slewing, 205=Not slewing) and slew status.
+    For initial alert (packet 202): Shows full details with trigger info
+    For slew updates (packets 204, 205): Shows only slew status change
+    For MXT updates (packet 209): Shows MXT position
 
     Parameters
     ----------
     grb_alert : GRB_alert
         The SVOM GRB alert object.
     **kwargs
-        Additional keyword arguments (unused).
+        Additional keyword arguments:
+        - is_thread_update: Boolean indicating if this is a thread update (for slew status)
+        - mxt_alert: GRB_alert object for MXT alert (provides position)
+        - is_mxt_update: Boolean indicating if this is an MXT position update
 
     Returns
     -------
@@ -33,25 +80,38 @@ def build_svom_alert_msg(grb_alert: GRB_alert, **kwargs) -> Message:
     """
     alert_data = grb_alert.to_slack_format()
     packet_type = alert_data["packet_type"]
+    is_thread_update = kwargs.get("is_thread_update", False)
+    mxt_alert = kwargs.get("mxt_alert")
+    is_mxt_update = kwargs.get("is_mxt_update", False)
 
-    if packet_type == 202:
-        type_label = "Eclairs wakeup"
-    elif packet_type in [204, 205]:
+    msg = Message()
+
+    # For MXT position updates, show MXT position
+    if is_mxt_update and mxt_alert:
+        mxt_data = mxt_alert.to_slack_format()
+        return _build_position_update_message(
+            grb_alert.grb_name, "MXT Position", mxt_data['ra'], mxt_data['dec']
+        )
+
+    # For thread updates (slew status changes), only show the status
+    if is_thread_update and packet_type in [204, 205]:
         slew_status = alert_data.get("slew_status", "unknown")
-        type_label = f"Slewing: {slew_status}"
-    else:
-        type_label = f"{packet_type}"
+        message_text = f"• *Slew Status:* {slew_status}"
+        msg.add_header(f"Update: SVOM GRB {grb_alert.grb_name}")
+        msg.add_divider()
+        msg.add_elements(BaseSection().add_text(MarkdownText(message_text)))
+        return msg
 
+    # For initial alert (packet 202) or first message
     message_text = (
-        f"• *Packet type:* {type_label}\n"
         f"• *Trigger Time:* {alert_data['trigger_time']}\n"
+        f"• *Rate_Signif:* {grb_alert.rate_signif} / *Image_Signif:* {grb_alert.image_signif} / *Trigger_Dur:* {grb_alert.trigger_dur}\n"
         f"• *Position:* RA {alert_data['ra']}, DEC {alert_data['dec']}\n"
         f"• *Uncertainty:* {alert_data['uncertainty_arcmin']} arcmin\n"
         f":grb: <{alert_data['skyportal_link']}|SkyPortal Link>"
     )
 
-    msg = Message()
-    msg.add_header(f"🔔 New SVOM GRB: {alert_data['trigger_id']}")
+    msg.add_header(f"🔔 New SVOM GRB {grb_alert.grb_name} / {alert_data['trigger_id']}")
     msg.add_divider()
     msg.add_elements(BaseSection().add_text(MarkdownText(message_text)))
 
@@ -60,55 +120,87 @@ def build_svom_alert_msg(grb_alert: GRB_alert, **kwargs) -> Message:
 
 def build_swift_alert_msg(grb_alert: GRB_alert, **kwargs) -> Message:
     """
-    Build a Slack message for a GRB alert notification.
+    Build a Slack message for a Swift GRB alert.
 
-    For Swift alerts, if a BAT alert is provided, the message will combine
-    information from both BAT and XRT alerts.
-
-    Format (Swift BAT + XRT combined):
-    :grb: Alert : Swift at [BAT Trigger Time]
-    BAT Position: RA, DEC with UNC : [XX] arcmin
-    XRT Position: RA, DEC with UNC : [XX] arcmin
-    Skyportal Link
+    For initial alert: Shows GRB name, trigger info from BAT, and XRT position
+    For XRT updates: Shows only updated XRT position in simplified format
+    For UVOT updates: Shows optical counterpart position without uncertainty
 
     Parameters
     ----------
     grb_alert : GRB_alert
-        The GRB alert object (typically XRT for Swift).
+        The GRB alert object.
     **kwargs
         Additional keyword arguments:
-        - bat_alert: Optional GRB_alert object for BAT alert (for Swift combined messages)
+        - bat_alert: GRB_alert object for BAT alert (provides trigger info)
+        - xrt_alert: GRB_alert object for XRT alert (provides position)
+        - uvot_alert: GRB_alert object for UVOT alert (provides optical position)
+        - is_xrt_update: Boolean indicating if this is an XRT position update
+        - is_uvot_update: Boolean indicating if this is a UVOT position update
 
     Returns
     -------
     Message
-        A formatted Slack message for the GRB alert.
+        A formatted Slack message for the Swift alert.
     """
     bat_alert = kwargs.get("bat_alert")
     xrt_alert = kwargs.get("xrt_alert")
+    uvot_alert = kwargs.get("uvot_alert")
+    is_xrt_update = kwargs.get("is_xrt_update", False)
+    is_uvot_update = kwargs.get("is_uvot_update", False)
 
-    # Get common data from first available alert
-    first = bat_alert or xrt_alert or grb_alert
+    # Get GRB name and trigger ID from BAT, XRT, or UVOT
+    first = bat_alert or xrt_alert or uvot_alert or grb_alert
     data = first.to_slack_format()
 
-    # Build position lines for each available alert
-    positions = {"BAT": bat_alert, "XRT": xrt_alert}
-    pos_lines = [
-        f"• *{name} Position:* RA {alert.to_slack_format()['ra']}, "
-        f"DEC {alert.to_slack_format()['dec']} "
-        f"(UNC: {alert.to_slack_format()['uncertainty_arcmin']} arcmin)"
-        for name, alert in positions.items()
-        if alert
-    ]
-
-    message_text = (
-        f"• *Trigger Time:* {data['trigger_time']}\n"
-        f"{chr(10).join(pos_lines)}\n"
-        f":grb: <{data['skyportal_link']}|SkyPortal Link>"
-    )
-
     msg = Message()
-    msg.add_header(f"🔔 New Swift GRB: {data['trigger_id']}")
+
+    # For UVOT position updates, show optical counterpart message (no uncertainty)
+    if is_uvot_update and uvot_alert:
+        uvot_data = uvot_alert.to_slack_format()
+        return _build_position_update_message(
+            first.grb_name,
+            "Optical counterpart found by Swift/UVOT",
+            uvot_data['ra'],
+            uvot_data['dec']
+        )
+
+    # For XRT position updates, show simplified message
+    if is_xrt_update and xrt_alert:
+        xrt_data = xrt_alert.to_slack_format()
+        return _build_position_update_message(
+            first.grb_name,
+            "XRT Position updated",
+            xrt_data['ra'],
+            xrt_data['dec'],
+            xrt_data['uncertainty_arcmin']
+        )
+
+    # For initial alert, show full message
+    message_text_parts = [f"• *Trigger Time:* {data['trigger_time']}"]
+
+    # Add trigger info (Rate_Signif, Image_Signif, Trigger_Dur) from BAT if available
+    if bat_alert:
+        trigger_info = (
+            f"• *Trigger info:* Rate_Signif: {bat_alert.rate_signif} / "
+            f"Image_Signif: {bat_alert.image_signif} / "
+            f"Trigger_Dur: {bat_alert.trigger_dur}"
+        )
+        message_text_parts.append(trigger_info)
+
+    # Add XRT position only (not BAT position)
+    if xrt_alert:
+        xrt_data = xrt_alert.to_slack_format()
+        xrt_position = (
+            f"• *XRT Position:* RA {xrt_data['ra']}, DEC {xrt_data['dec']} "
+            f"(UNC: {xrt_data['uncertainty_arcmin']} arcmin)"
+        )
+        message_text_parts.append(xrt_position)
+
+    message_text_parts.append(f":grb: <{data['skyportal_link']}|SkyPortal Link>")
+    message_text = "\n".join(message_text_parts)
+
+    msg.add_header(f"🔔 New Swift GRB {first.grb_name} / Trigger ID: {data['trigger_id']}")
     msg.add_divider()
     msg.add_elements(BaseSection().add_text(MarkdownText(message_text)))
 
