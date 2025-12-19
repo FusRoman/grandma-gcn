@@ -3,10 +3,17 @@ import uuid
 from gcn_kafka import Consumer as KafkaConsumer
 from yarl import URL
 
+from grandma_gcn.database.grb_db import GRB_alert as GRB_alert_DB
 from grandma_gcn.database.gw_db import GW_alert as GW_alert_DB
 from grandma_gcn.gcn_stream.automatic_gwemopt import automatic_gwemopt_process
 from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
+from grandma_gcn.gcn_stream.grb_alert import GRB_alert, Mission
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
+from grandma_gcn.slackbot.grb_message import (
+    build_svom_alert_msg,
+    build_swift_alert_msg,
+    send_grb_alert_to_slack,
+)
 from grandma_gcn.slackbot.gw_message import (
     build_gwalert_data_msg,
     build_gwalert_notification_msg,
@@ -34,6 +41,11 @@ class Consumer(KafkaConsumer):
 
         self.gw_alert_channel = gcn_stream.gcn_config["Slack"]["gw_alert_channel"]
         self.gw_channel_id = gcn_stream.gcn_config["Slack"]["gw_alert_channel_id"]
+
+        # GRB alert channel (optional, defaults to GW channel if not specified)
+        self.grb_alert_channel = gcn_stream.gcn_config["Slack"].get(
+            "grb_alert_channel", self.gw_alert_channel
+        )
 
         # Subscribe to topics and receive alerts
         if gcn_stream.restart_queue:
@@ -117,7 +129,32 @@ class Consumer(KafkaConsumer):
 
         return path_gw_alert, url_owncloud_alert
 
-    def process_alert(self, notice: bytes) -> None:
+    def process_alert(self, notice: bytes, topic: str) -> None:
+        """
+        Process an alert notice received from the Kafka stream.
+        Routes to GW or GRB processing based on the topic.
+
+        Parameters
+        ----------
+        notice : bytes
+            The alert notice in bytes, as received from the Kafka stream.
+        topic : str
+            The Kafka topic name (e.g., "igwn.gwalert", "gcn.notices.swift.bat.guano").
+
+        Raises
+        ------
+        Exception
+            Any exception during processing is logged and re-raised.
+        """
+        topic_lower = topic.lower()
+        is_grb = "swift" in topic_lower or "svom" in topic_lower
+
+        if is_grb:
+            self._process_grb_alert(notice)
+        else:
+            self._process_gw_alert(notice)
+
+    def _process_gw_alert(self, notice: bytes) -> None:
         """
         Process a GW alert notice received from the Kafka stream.
 
@@ -340,6 +377,217 @@ class Consumer(KafkaConsumer):
             logger=self.logger,
         )
 
+    def _process_grb_alert(self, notice: bytes) -> None:
+        """
+        Process a GRB alert notice received from the Kafka stream.
+
+        This method performs the following steps:
+        1. Parses the GRB alert
+        2. Filters based on mission and packet type
+        3. Saves or updates the alert in the database
+        4. Sends a Slack notification
+
+        Parameters
+        ----------
+        notice : bytes
+            The alert notice in bytes, as received from the Kafka stream.
+
+        Raises
+        ------
+        Exception
+            Any exception during processing is logged and re-raised.
+        """
+        try:
+            grb_alert = GRB_alert(notice)
+
+            self.logger.info(f"Processing GRB alert: {grb_alert.trigger_id}")
+            self.logger.info(
+                f"Mission: {grb_alert.mission.value}, "
+                f"Packet Type: {grb_alert.packet_type}, "
+                f"Position: RA={grb_alert.ra:.2f}, Dec={grb_alert.dec:.2f}, "
+                f"Error: {grb_alert.ra_dec_error_arcmin:.2f} arcmin"
+            )
+
+            # Filter alerts based on mission and packet type
+            should_process = grb_alert.should_process_alert()
+            if not should_process:
+                self.logger.info(
+                    f"GRB alert {grb_alert.trigger_id} filtered out (mission: {grb_alert.mission.value}, packet_type: {grb_alert.packet_type})"
+                )
+                return
+
+            # Save or update in database
+            grb_alert_db = self._push_grb_alert_to_db(grb_alert)
+
+            # Determine if we should send a Slack message
+            # For Swift: only send message if we have BAT_GRB_POS_ACK (packet=61) and XRT_POSITION (packet_type 67)
+            # For SVOM: send message for all alerts
+            should_send_slack = True
+            bat_alert = None
+            xrt_alert = None
+
+            if grb_alert.mission == Mission.SWIFT:
+                if grb_alert.packet_type == 61:  # BAT_GRB_POS_ACK
+                    # Check if XRT already exists
+                    xrt_alert_db = GRB_alert_DB.get_by_trigger_id_and_packet_type(
+                        self.gcn_stream.session_local, grb_alert.trigger_id, 67
+                    )
+
+                    if xrt_alert_db:
+                        # XRT exists, send combined message
+                        self.logger.info(
+                            f"BAT alert {grb_alert.trigger_id} arrived after XRT, sending combined message"
+                        )
+                        should_send_slack = True
+                    else:
+                        # XRT hasn't arrived yet, store BAT and wait
+                        self.logger.info(
+                            f"Swift BAT alert {grb_alert.trigger_id} stored, waiting for XRT"
+                        )
+                        should_send_slack = False
+
+                elif grb_alert.packet_type == 67:  # XRT_POSITION
+                    # Check if BAT already exists
+                    bat_alert_db = GRB_alert_DB.get_by_trigger_id_and_packet_type(
+                        self.gcn_stream.session_local, grb_alert.trigger_id, 61
+                    )
+
+                    if bat_alert_db:
+                        # BAT exists, send combined message
+                        self.logger.info(
+                            f"XRT alert {grb_alert.trigger_id} arrived after BAT, sending combined message"
+                        )
+                        should_send_slack = True
+                    else:
+                        # BAT hasn't arrived yet, store XRT and wait
+                        self.logger.info(
+                            f"Swift XRT alert {grb_alert.trigger_id} stored, waiting for BAT"
+                        )
+                        should_send_slack = False
+
+            # Send Slack notification if appropriate
+            if should_send_slack:
+                # Choose message builder based on mission
+                if grb_alert.mission == Mission.SWIFT:
+                    # For Swift, always fetch both BAT and XRT from DB
+                    if not bat_alert:
+                        bat_alert_db = GRB_alert_DB.get_by_trigger_id_and_packet_type(
+                            self.gcn_stream.session_local, grb_alert.trigger_id, 61
+                        )
+                        bat_alert = (
+                            GRB_alert.from_db_model(bat_alert_db)
+                            if bat_alert_db
+                            else None
+                        )
+                    if not xrt_alert:
+                        xrt_alert_db = GRB_alert_DB.get_by_trigger_id_and_packet_type(
+                            self.gcn_stream.session_local, grb_alert.trigger_id, 67
+                        )
+                        xrt_alert = (
+                            GRB_alert.from_db_model(xrt_alert_db)
+                            if xrt_alert_db
+                            else None
+                        )
+
+                    message_builder = build_swift_alert_msg
+                    kwargs = {"bat_alert": bat_alert, "xrt_alert": xrt_alert}
+                else:
+                    # For SVOM, use current alert
+                    message_builder = build_svom_alert_msg
+                    kwargs = {}
+
+                # Check if we already have a thread for this trigger_id
+                existing_thread = (
+                    self.gcn_stream.session_local.query(GRB_alert_DB)
+                    .filter_by(triggerId=grb_alert.trigger_id)
+                    .filter(GRB_alert_DB.thread_ts.isnot(None))
+                    .first()
+                )
+
+                thread_ts = existing_thread.thread_ts if existing_thread else None
+
+                response = send_grb_alert_to_slack(
+                    grb_alert=grb_alert,
+                    message_builder=message_builder,
+                    slack_client=self.gcn_stream.slack_client,
+                    channel=self.grb_alert_channel,
+                    logger=self.logger,
+                    thread_ts=thread_ts,
+                    **kwargs,
+                )
+
+                # Save thread timestamp if this is the first message
+                if thread_ts is None:
+                    grb_alert_db.set_thread_ts(
+                        response["ts"], self.gcn_stream.session_local
+                    )
+                    self.logger.info(
+                        f"Thread timestamp set for GRB alert {grb_alert.trigger_id}: {response['ts']}"
+                    )
+
+        except Exception as err:
+            self.logger.error(f"Error processing GRB alert: {err}")
+            raise err
+
+    def _push_grb_alert_to_db(self, grb_alert: GRB_alert) -> GRB_alert_DB:
+        """
+        Push a GRB alert into the database or increment the reception count if it already exists.
+
+        Parameters
+        ----------
+        grb_alert : GRB_alert
+            The GRB alert object containing event information.
+
+        Returns
+        -------
+        GRB_alert_DB
+            The GRB alert database object representing the alert in the database.
+        """
+        grb_alert_db = GRB_alert_DB.get_last_by_trigger_id(
+            self.gcn_stream.session_local, grb_alert.trigger_id
+        )
+
+        if grb_alert_db is None:
+            grb_alert_db = GRB_alert_DB(
+                triggerId=grb_alert.trigger_id,
+                mission=grb_alert.mission.value,
+                packet_type=grb_alert.packet_type,
+                ra=grb_alert.ra,
+                dec=grb_alert.dec,
+                error_deg=grb_alert.ra_dec_error,
+                trigger_time=grb_alert.trigger_time_as_datetime,
+                xml_payload=grb_alert.xml_string,
+                thread_ts=None,
+                reception_count=1,
+            )
+            self.gcn_stream.session_local.add(grb_alert_db)
+            self.gcn_stream.session_local.commit()
+            self.logger.info(
+                f"New GRB alert {grb_alert.trigger_id} added to database with reception count 1."
+            )
+        else:
+            grb_alert_db_new = GRB_alert_DB(
+                triggerId=grb_alert.trigger_id,
+                mission=grb_alert.mission.value,
+                packet_type=grb_alert.packet_type,
+                ra=grb_alert.ra,
+                dec=grb_alert.dec,
+                error_deg=grb_alert.ra_dec_error,
+                trigger_time=grb_alert.trigger_time_as_datetime,
+                xml_payload=grb_alert.xml_string,
+                thread_ts=grb_alert_db.thread_ts,
+                reception_count=grb_alert_db.reception_count + 1,
+            )
+            self.gcn_stream.session_local.add(grb_alert_db_new)
+            self.gcn_stream.session_local.commit()
+            self.logger.info(
+                f"GRB alert {grb_alert.trigger_id} already exists, "
+                f"incrementing reception count to {grb_alert_db_new.reception_count}."
+            )
+            grb_alert_db = grb_alert_db_new
+
+        return grb_alert_db
+
     def start_poll_loop(
         self, interval_between_polls: int = 1, max_retries: int = 120
     ) -> None:
@@ -358,7 +606,7 @@ class Consumer(KafkaConsumer):
                     self.logger.error(message.error())
                     continue
                 try:
-                    self.process_alert(notice=message.value())
+                    self.process_alert(notice=message.value(), topic=message.topic())
                     self.commit(message)
                 except Exception as err:
                     self.logger.error(err)

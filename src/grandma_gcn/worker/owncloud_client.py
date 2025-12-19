@@ -8,8 +8,8 @@ from yarl import URL
 
 
 class OwncloudClient:
-    def __init__(self, config: dict[str, Any]) -> None:
-        self.owncloud_config: dict[str, Any] = config
+    def __init__(self, config: dict[str, Any] | None) -> None:
+        self.owncloud_config: dict[str, Any] = config if config is not None else {}
         self.logger = logging.getLogger("grandma_gcn.owncloud")
 
     @property

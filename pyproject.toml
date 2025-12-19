@@ -24,6 +24,7 @@ dependencies = [
     "python-dotenv>=1.1.1",
     "flask>=3.1.1",
     "gunicorn>=23.0.0",
+    "voevent-parse @ git+https://github.com/grandma-collaboration/voevent-parse.git@master",
 ]
 requires-python = ">=3.12"
 readme = "README.md"
