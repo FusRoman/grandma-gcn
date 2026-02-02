@@ -8,6 +8,7 @@ on the SWIFT website.
 
 import json
 from pathlib import Path
+
 import requests
 from celery import current_task
 from fink_utils.slack_bot.bot import init_slackbot

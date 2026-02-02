@@ -1,6 +1,6 @@
 from typing import Self
 
-from sqlalchemy import Column, Integer, Float, String, DateTime, Text, desc
+from sqlalchemy import Column, DateTime, Float, Integer, String, Text, desc
 from sqlalchemy.orm import Session
 
 from grandma_gcn.database.base import Base
@@ -17,7 +17,9 @@ class GRB_alert(Base):
     id_grb = Column(Integer, primary_key=True, autoincrement=True)
     triggerId = Column(String, nullable=False, index=True)
     mission = Column(String, nullable=True)  # "Swift" or "SVOM"
-    packet_type = Column(Integer, nullable=True)  # Packet type (61=BAT_POS_ACK, 67=XRT, etc.)
+    packet_type = Column(
+        Integer, nullable=True
+    )  # Packet type (61=BAT_POS_ACK, 67=XRT, etc.)
     ra = Column(Float, nullable=True)  # Right ascension in degrees
     dec = Column(Float, nullable=True)  # Declination in degrees
     error_deg = Column(Float, nullable=True)  # Error radius in degrees
@@ -77,7 +79,11 @@ class GRB_alert(Base):
 
     @classmethod
     def get_by_trigger_id_and_packet_type(
-        cls, session: Session, trigger_id: str, packet_type: int, get_first: bool = False
+        cls,
+        session: Session,
+        trigger_id: str,
+        packet_type: int,
+        get_first: bool = False,
     ) -> Self | None:
         """
         Retrieve an alert by trigger ID and packet type.
@@ -98,7 +104,9 @@ class GRB_alert(Base):
         GRB_alert | None
             The GRB_alert database instance if found, otherwise None.
         """
-        query = session.query(GRB_alert).filter_by(triggerId=trigger_id, packet_type=packet_type)
+        query = session.query(GRB_alert).filter_by(
+            triggerId=trigger_id, packet_type=packet_type
+        )
 
         if get_first:
             # Get oldest alert (first arrival)
@@ -108,9 +116,7 @@ class GRB_alert(Base):
             return query.order_by(desc(GRB_alert.id_grb)).first()
 
     @classmethod
-    def get_all_by_trigger_id(
-        cls, session: Session, trigger_id: str
-    ) -> list[Self]:
+    def get_all_by_trigger_id(cls, session: Session, trigger_id: str) -> list[Self]:
         """
         Retrieve all alerts for a given trigger ID, ordered by arrival time.
 

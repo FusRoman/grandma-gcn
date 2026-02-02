@@ -7,10 +7,7 @@ from slack_sdk.web.slack_response import SlackResponse
 
 from grandma_gcn.gcn_stream.gcn_logging import LoggerNewLine
 from grandma_gcn.gcn_stream.grb_alert import GRB_alert
-from grandma_gcn.slackbot.element_extension import (
-    BaseSection,
-    MarkdownText,
-)
+from grandma_gcn.slackbot.element_extension import BaseSection, MarkdownText
 
 
 def _build_position_update_message(
