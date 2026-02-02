@@ -5,8 +5,10 @@ import pytest
 import sqlalchemy
 from astropy.table import Table
 
+from grandma_gcn.database.grb_db import Base as GRBBase
 from grandma_gcn.database.gw_db import Base as GWBase
 from grandma_gcn.gcn_stream.gcn_logging import init_logging
+from grandma_gcn.gcn_stream.grb_alert import GRB_alert, Mission
 from grandma_gcn.gcn_stream.gw_alert import GW_alert
 
 
@@ -17,6 +19,7 @@ def sqlite_engine_and_session(tmp_path):
         f"sqlite:///{db_path}", connect_args={"check_same_thread": False}
     )
     GWBase.metadata.create_all(engine)
+    GRBBase.metadata.create_all(engine)
     Session = sqlalchemy.orm.sessionmaker(bind=engine)
     return engine, Session
 
@@ -158,3 +161,38 @@ def patch_load_gcn_config(monkeypatch):
             "Slack": {"gw_alert_channel": "C123", "gw_alert_channel_id": "C123id"},
         },
     )
+
+
+@pytest.fixture
+def swift_bat_alert(path_tests) -> GRB_alert:
+    """Swift BAT GRB alert (packet type 61)"""
+    bytes_notice = open_notice_file(path_tests, "swift_bat_type61.xml")
+    return GRB_alert(bytes_notice, Mission.SWIFT)
+
+
+@pytest.fixture
+def swift_xrt_alert(path_tests) -> GRB_alert:
+    """Swift XRT alert (packet type 67)"""
+    bytes_notice = open_notice_file(path_tests, "swift_xrt_type67.xml")
+    return GRB_alert(bytes_notice, Mission.SWIFT)
+
+
+@pytest.fixture
+def swift_uvot_alert(path_tests) -> GRB_alert:
+    """Swift UVOT alert (packet type 81)"""
+    bytes_notice = open_notice_file(path_tests, "swift_uvot_type81.xml")
+    return GRB_alert(bytes_notice, Mission.SWIFT)
+
+
+@pytest.fixture
+def svom_eclairs_alert(path_tests) -> GRB_alert:
+    """SVOM ECLAIRs alert (packet type 202)"""
+    bytes_notice = open_notice_file(path_tests, "svom_eclairs.xml")
+    return GRB_alert(bytes_notice, Mission.SVOM)
+
+
+@pytest.fixture
+def svom_mxt_alert(path_tests) -> GRB_alert:
+    """SVOM MXT alert (packet type 209)"""
+    bytes_notice = open_notice_file(path_tests, "svom_mxt.xml")
+    return GRB_alert(bytes_notice, Mission.SVOM)

@@ -1,0 +1,69 @@
+<?xml version = '1.0' encoding = 'UTF-8'?>
+<voe:VOEvent
+      ivorn="ivo://nasa.gsfc.gcn/SWIFT#XRT_Pos_1423875-123"
+      role="observation" version="2.0"
+      xmlns:voe="http://www.ivoa.net/xml/VOEvent/v2.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.ivoa.net/xml/VOEvent/v2.0  http://www.ivoa.net/xml/VOEvent/VOEvent-v2.0.xsd" >
+  <Who>
+    <AuthorIVORN>ivo://nasa.gsfc.tan/gcn</AuthorIVORN>
+    <Author>
+      <shortName>VO-GCN</shortName>
+      <contactName>Scott Barthelmy</contactName>
+      <contactPhone>+1-301-286-3106</contactPhone>
+      <contactEmail>scott.barthelmy@nasa.gov</contactEmail>
+    </Author>
+    <Date>2025-12-14T09:15:00</Date>
+    <Description>This VOEvent message was created with GCN VOE version: 15.08 17jun22</Description>
+  </Who>
+  <What>
+    <Param name="Packet_Type"  value="67" />
+    <Param name="Pkt_Ser_Num"  value="1" />
+    <Param name="TrigID"       value="1423875" ucd="meta.id" />
+    <Param name="Segment_Num"  value="0" ucd="meta.id.part" />
+    <Param name="Burst_TJD"    value="21023" unit="days" ucd="time" />
+    <Param name="Burst_SOD"    value="32537.54" unit="sec" ucd="time" />
+    <Param name="RA_XRT"       value="74.7510" unit="deg" ucd="pos.eq.ra" />
+    <Param name="Dec_XRT"      value="-9.3095" unit="deg" ucd="pos.eq.dec" />
+    <Param name="Err_Radius"   value="0.0014" unit="deg" ucd="stat.error;pos.eq" />
+    <Group name="Solution_Status" >
+      <Param name="Point_Source"    value="true" />
+      <Param name="GRB_Identified"  value="true" />
+    </Group>
+  </What>
+  <WhereWhen>
+    <ObsDataLocation>
+      <ObservatoryLocation id="GEOLUN" />
+      <ObservationLocation>
+        <AstroCoordSystem id="UTC-FK5-GEO" />
+        <AstroCoords coord_system_id="UTC-FK5-GEO">
+          <Time unit="s">
+            <TimeInstant>
+              <ISOTime>2025-12-14T09:02:17.54</ISOTime>
+            </TimeInstant>
+          </Time>
+          <Position2D unit="deg">
+            <Name1>RA</Name1>
+            <Name2>Dec</Name2>
+            <Value2>
+              <C1>74.7510</C1>
+              <C2>-9.3095</C2>
+            </Value2>
+            <Error2Radius>0.0014</Error2Radius>
+          </Position2D>
+        </AstroCoords>
+      </ObservationLocation>
+    </ObsDataLocation>
+  </WhereWhen>
+  <How>
+    <Description>Swift Satellite, XRT instrument</Description>
+    <Reference uri="http://gcn.gsfc.nasa.gov/swift.html" type="url" />
+  </How>
+  <Why importance="0.95">
+    <Inference probability="0.95">
+      <Name>GRB 251214</Name>
+      <Concept>process.variation.burst;em.gamma</Concept>
+    </Inference>
+  </Why>
+  <Description>XRT position for GRB 1423875</Description>
+</voe:VOEvent>

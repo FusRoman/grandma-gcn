@@ -8,7 +8,13 @@ secret = "tata"
 "enable.auto.commit" = false
 
 [GCN_TOPICS]
-topics = ["igwn.gwalert"]
+topics = ['igwn.gwalert', 
+            'gcn.classic.voevent.SWIFT_BAT_GRB_POS_ACK',
+            'gcn.classic.voevent.SWIFT_BAT_QL_POS',
+            'gcn.classic.voevent.SWIFT_UVOT_POS',
+            'gcn.classic.voevent.SWIFT_XRT_POSITION',
+            'gcn.notices.svom.voevent.eclairs',
+            'gcn.notices.svom.voevent.mxt']
 
 [PATH]
 gcn_stream_log_path = "gcn_stream_test.log"
@@ -23,6 +29,8 @@ BBH_size_cut = 500 # in deg²
 [Slack]
 gw_alert_channel = "#test_gwalerts"
 gw_alert_channel_id = "fake_id"
+grb_alert_channel = "#test_grbalerts"
+grb_alert_channel_id = "fake_id"
 
 [GWEMOPT]
 telescopes = [["TCH", "TRE"], ["TCA", "FZU-CTA-N"], ["FZU-Auger", "UBAI-T60S"], ["KAO", "Colibri"]]
