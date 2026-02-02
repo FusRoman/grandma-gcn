@@ -60,7 +60,7 @@
 
       <Param name="Galactic_Lon" value="65.26" unit="deg" ucd="pos.galactic.lon"/>
 
-      <Parm name="Galactic_Lat" value="-46.82" unit="deg" ucd="pos.galactic.lat"/>
+      <Param name="Galactic_Lat" value="-46.82" unit="deg" ucd="pos.galactic.lat"/>
 
       <Param name="Moon_Angle" value="146.93" unit="deg" ucd="pos.angDistance"/>
 
@@ -145,4 +145,3 @@
   </How>
 
 </voe:VOEvent>
-

@@ -1,10 +1,7 @@
 """Tests for GRB Slack message builders."""
 
 from grandma_gcn.gcn_stream.grb_alert import GRB_alert
-from grandma_gcn.slackbot.grb_message import (
-    build_svom_alert_msg,
-    build_swift_alert_msg,
-)
+from grandma_gcn.slackbot.grb_message import build_svom_alert_msg, build_swift_alert_msg
 
 
 def test_build_swift_alert_msg_basic(swift_bat_alert: GRB_alert):
