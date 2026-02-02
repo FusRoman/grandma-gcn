@@ -449,10 +449,13 @@ class Consumer(KafkaConsumer):
             )
 
             if mission == Mission.SWIFT:
-                # For Swift updates
                 bat_alert = self._fetch_alert_from_db(trigger_id, 61)
                 xrt_alert = self._fetch_alert_from_db(trigger_id, 67)
-                uvot_alert = self._fetch_alert_from_db(trigger_id, 81) if alert_db.packet_type == 81 else None
+                uvot_alert = (
+                    self._fetch_alert_from_db(trigger_id, 81)
+                    if alert_db.packet_type == 81
+                    else None
+                )
 
                 is_xrt_update = alert_db.packet_type == 67
                 is_uvot_update = alert_db.packet_type == 81
@@ -473,7 +476,11 @@ class Consumer(KafkaConsumer):
 
             elif mission == Mission.SVOM:
                 # For SVOM updates
-                mxt_alert = self._fetch_alert_from_db(trigger_id, 209) if alert_db.packet_type == 209 else None
+                mxt_alert = (
+                    self._fetch_alert_from_db(trigger_id, 209)
+                    if alert_db.packet_type == 209
+                    else None
+                )
                 is_thread_update = True
                 is_mxt_update = alert_db.packet_type == 209
 
@@ -523,9 +530,7 @@ class Consumer(KafkaConsumer):
             )
             return True
         else:
-            self.logger.info(
-                f"{update_name} alert {trigger_id} stored, no thread yet"
-            )
+            self.logger.info(f"{update_name} alert {trigger_id} stored, no thread yet")
             return False
 
     def _fetch_alert_from_db(
@@ -550,6 +555,45 @@ class Consumer(KafkaConsumer):
             self.gcn_stream.session_local, trigger_id, packet_type
         )
         return GRB_alert.from_db_model(alert_db) if alert_db else None
+
+    def _schedule_swift_html_analysis(
+        self, trigger_id: str, thread_ts: str, channel: str
+    ) -> None:
+        """
+        Schedule a Celery task to fetch and parse SWIFT HTML analysis after 3 minutes.
+
+        This gives the SWIFT pipeline time to generate the HTML analysis page.
+
+        Parameters
+        ----------
+        trigger_id : str
+            The SWIFT trigger ID
+        thread_ts : str
+            The Slack thread timestamp to post results to
+        channel : str
+            The Slack channel to post to
+        """
+        try:
+            from grandma_gcn.worker.swift_html_worker import (
+                fetch_and_post_swift_analysis,
+            )
+
+            path_log = self.gcn_stream.gcn_config.get("PATH", {}).get(
+                "celery_task_log_path", "/tmp"
+            )
+
+            task = fetch_and_post_swift_analysis.apply_async(
+                args=[int(trigger_id), thread_ts, channel, path_log], countdown=180
+            )
+
+            self.logger.info(
+                f"Scheduled SWIFT HTML analysis task for trigger {trigger_id} "
+                f"(task ID: {task.id}, will run in 3 minutes)"
+            )
+        except Exception as e:
+            self.logger.error(
+                f"Failed to schedule SWIFT HTML analysis for trigger {trigger_id}: {e}"
+            )
 
     def _process_grb_alert(self, notice: bytes) -> None:
         """
@@ -640,31 +684,25 @@ class Consumer(KafkaConsumer):
                         should_send_slack = False
 
                 elif grb_alert.packet_type == 81:  # UVOT_POSITION
-                    # UVOT is always sent as a thread update (after initial BAT+XRT message)
                     should_send_slack = self._should_send_position_update(
                         grb_alert.trigger_id, 81, "UVOT"
                     )
 
             elif grb_alert.mission == Mission.SVOM:
                 if grb_alert.packet_type == 204:  # SLEW_ACCEPTED
-                    # Slew accepted is always sent as a thread update (after initial alert)
                     should_send_slack = self._should_send_position_update(
                         grb_alert.trigger_id, 204, "Slew accepted"
                     )
                 elif grb_alert.packet_type == 205:  # SLEW_REJECTED
-                    # Slew rejected is always sent as a thread update (after initial alert)
                     should_send_slack = self._should_send_position_update(
                         grb_alert.trigger_id, 205, "Slew rejected"
                     )
                 elif grb_alert.packet_type == 209:  # MXT_POSITION
-                    # MXT is always sent as a thread update (after initial alert)
                     should_send_slack = self._should_send_position_update(
                         grb_alert.trigger_id, 209, "MXT"
                     )
 
-            # Send Slack notification if appropriate
             if should_send_slack:
-                # Choose message builder based on mission
                 if grb_alert.mission == Mission.SWIFT:
                     # For Swift, always fetch BAT and FIRST XRT from DB for initial message
                     if not bat_alert:
@@ -672,9 +710,16 @@ class Consumer(KafkaConsumer):
                     if not xrt_alert:
                         # Get the FIRST XRT (oldest) for the initial combined message
                         xrt_alert_db = GRB_alert_DB.get_by_trigger_id_and_packet_type(
-                            self.gcn_stream.session_local, grb_alert.trigger_id, 67, get_first=True
+                            self.gcn_stream.session_local,
+                            grb_alert.trigger_id,
+                            67,
+                            get_first=True,
                         )
-                        xrt_alert = GRB_alert.from_db_model(xrt_alert_db) if xrt_alert_db else None
+                        xrt_alert = (
+                            GRB_alert.from_db_model(xrt_alert_db)
+                            if xrt_alert_db
+                            else None
+                        )
 
                     # Fetch UVOT alert if available
                     uvot_alert = self._fetch_alert_from_db(grb_alert.trigger_id, 81)
@@ -687,7 +732,6 @@ class Consumer(KafkaConsumer):
                         .first()
                     )
 
-                    # If this is an XRT or UVOT packet and thread exists, it's a position update
                     is_xrt_update = (
                         grb_alert.packet_type == 67 and existing_thread is not None
                     )
@@ -761,10 +805,19 @@ class Consumer(KafkaConsumer):
                         f"Thread timestamp set for GRB alert {grb_alert.trigger_id}: {response['ts']}"
                     )
 
-                    # Send any pending updates that arrived before the thread was created
                     self._send_pending_updates_to_thread(
-                        grb_alert.trigger_id, grb_alert.mission, response["ts"], grb_alert_db.id_grb
+                        grb_alert.trigger_id,
+                        grb_alert.mission,
+                        response["ts"],
+                        grb_alert_db.id_grb,
                     )
+
+                    if grb_alert.mission == Mission.SWIFT:
+                        self._schedule_swift_html_analysis(
+                            trigger_id=grb_alert.trigger_id,
+                            thread_ts=response["ts"],
+                            channel=self.grb_alert_channel,
+                        )
 
         except Exception as err:
             self.logger.error(f"Error processing GRB alert: {err}")

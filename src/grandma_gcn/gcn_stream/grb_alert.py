@@ -458,6 +458,26 @@ class GRB_alert:
             self.logger.warning(f"Error extracting trigger_dur: {e}")
             return "NA"
 
+    @property
+    def burst_mag(self) -> float | None:
+        """
+        Get the burst magnitude from UVOT data.
+        The raw value is in centimagnitudes, so we divide by 100.
+
+        Returns
+        -------
+        float | None
+            Burst magnitude or None if not available
+        """
+        try:
+            top_params = vp.get_toplevel_params(self.voevent)
+            if "Burst_Mag" in top_params:
+                return float(top_params["Burst_Mag"]["value"]) / 100
+            return None
+        except Exception as e:
+            self.logger.warning(f"Error extracting burst_mag: {e}")
+            return None
+
     def should_process_alert(self) -> bool:
         """
         Determine if this GRB alert should be processed based on mission and packet type.
@@ -528,28 +548,3 @@ class GRB_alert:
             f"Alert {self.trigger_id} has unknown mission, accepting by default"
         )
         return True
-
-    def to_slack_format(self) -> dict:
-        """
-        Format the GRB alert data for Slack notification.
-
-        Returns
-        -------
-        dict
-            Dictionary with formatted alert information
-        """
-        data = {
-            "trigger_id": self.trigger_id,
-            "mission": self.mission.value,
-            "trigger_time": self.trigger_time_formatted,
-            "ra": f"{self.ra:.2f}",
-            "dec": f"{self.dec:.2f}",
-            "uncertainty_arcmin": f"{self.ra_dec_error_arcmin:.2f}",
-            "skyportal_link": self.skyportal_link,
-            "packet_type": self.packet_type,
-        }
-
-        if self.mission == Mission.SVOM:
-            data["slew_status"] = self.slew_status
-
-        return data
