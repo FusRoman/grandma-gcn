@@ -107,7 +107,9 @@ def test_start_poll_loop(mocker, mock_gcn_stream):
     # Assertions
     assert mock_poll_method.call_count == 3  # Still unclear why it is called 3 times
     mock_commit_method.assert_called_once_with(mock_message)
-    mock_process_alert.assert_called_once_with(notice=mock_message.value.return_value)
+    mock_process_alert.assert_called_once_with(
+        notice=mock_message.value.return_value, topic=mock_message.topic.return_value
+    )
     assert len(message_queue) == 0
 
 
@@ -163,7 +165,9 @@ def test_gcn_stream_run(mocker, sqlite_engine_and_session, gcn_config_path, logg
     # Assertions
     assert mock_poll_method.call_count == 3601
     mock_commit_method.assert_called_once_with(mock_message)
-    mock_process_alert.assert_called_once_with(notice=mock_message.value.return_value)
+    mock_process_alert.assert_called_once_with(
+        notice=mock_message.value.return_value, topic=mock_message.topic.return_value
+    )
     assert len(message_queue) == 0
 
 
