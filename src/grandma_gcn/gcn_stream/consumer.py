@@ -398,9 +398,7 @@ class Consumer(KafkaConsumer):
             and alert.id_grb not in (first_bat_id, first_xrt_id)
         ]
 
-    def _get_pending_svom_alerts(
-        self, all_alerts: list, initial_alert_id: int
-    ) -> list:
+    def _get_pending_svom_alerts(self, all_alerts: list, initial_alert_id: int) -> list:
         """Get pending SVOM alerts excluding first packet 202."""
         first_initial_id = None
         for alert in all_alerts:
@@ -485,7 +483,9 @@ class Consumer(KafkaConsumer):
 
         # Get pending alerts based on mission
         if mission == Mission.SWIFT:
-            pending_alerts = self._get_pending_swift_alerts(all_alerts, initial_alert_id)
+            pending_alerts = self._get_pending_swift_alerts(
+                all_alerts, initial_alert_id
+            )
         elif mission == Mission.SVOM:
             pending_alerts = self._get_pending_svom_alerts(all_alerts, initial_alert_id)
         else:
@@ -498,9 +498,13 @@ class Consumer(KafkaConsumer):
             )
 
             if mission == Mission.SWIFT:
-                self._send_pending_swift_update(trigger_id, alert_db, grb_alert, thread_ts)
+                self._send_pending_swift_update(
+                    trigger_id, alert_db, grb_alert, thread_ts
+                )
             elif mission == Mission.SVOM:
-                self._send_pending_svom_update(trigger_id, alert_db, grb_alert, thread_ts)
+                self._send_pending_svom_update(
+                    trigger_id, alert_db, grb_alert, thread_ts
+                )
 
     def _should_send_position_update(
         self, trigger_id: str, packet_type: int, update_name: str
@@ -585,7 +589,7 @@ class Consumer(KafkaConsumer):
             )
 
             path_log = self.gcn_stream.gcn_config.get("PATH", {}).get(
-                "celery_task_log_path", "/tmp"
+                "celery_task_log_path",
             )
 
             task = fetch_and_post_swift_analysis.apply_async(
@@ -650,7 +654,9 @@ class Consumer(KafkaConsumer):
         update_types = {204: "Slew accepted", 205: "Slew rejected", 209: "MXT"}
         if grb_alert.packet_type in update_types:
             return self._should_send_position_update(
-                grb_alert.trigger_id, grb_alert.packet_type, update_types[grb_alert.packet_type]
+                grb_alert.trigger_id,
+                grb_alert.packet_type,
+                update_types[grb_alert.packet_type],
             )
         return True
 
@@ -668,8 +674,10 @@ class Consumer(KafkaConsumer):
             "bat_alert": bat_alert,
             "xrt_alert": xrt_alert,
             "uvot_alert": uvot_alert,
-            "is_xrt_update": grb_alert.packet_type == 67 and existing_thread is not None,
-            "is_uvot_update": grb_alert.packet_type == 81 and existing_thread is not None,
+            "is_xrt_update": grb_alert.packet_type == 67
+            and existing_thread is not None,
+            "is_uvot_update": grb_alert.packet_type == 81
+            and existing_thread is not None,
         }
 
     def _build_svom_slack_kwargs(self, grb_alert: GRB_alert) -> dict:
@@ -680,7 +688,8 @@ class Consumer(KafkaConsumer):
         return {
             "is_thread_update": existing_thread is not None,
             "mxt_alert": mxt_alert,
-            "is_mxt_update": grb_alert.packet_type == 209 and existing_thread is not None,
+            "is_mxt_update": grb_alert.packet_type == 209
+            and existing_thread is not None,
         }
 
     def _process_grb_alert(self, notice: bytes, mission: Mission) -> None:
@@ -718,11 +727,19 @@ class Consumer(KafkaConsumer):
             if mission == Mission.SWIFT:
                 should_send_slack = self._should_send_swift_slack(grb_alert)
                 message_builder = build_swift_alert_msg
-                kwargs = self._build_swift_slack_kwargs(grb_alert) if should_send_slack else {}
+                kwargs = (
+                    self._build_swift_slack_kwargs(grb_alert)
+                    if should_send_slack
+                    else {}
+                )
             elif mission == Mission.SVOM:
                 should_send_slack = self._should_send_svom_slack(grb_alert)
                 message_builder = build_svom_alert_msg
-                kwargs = self._build_svom_slack_kwargs(grb_alert) if should_send_slack else {}
+                kwargs = (
+                    self._build_svom_slack_kwargs(grb_alert)
+                    if should_send_slack
+                    else {}
+                )
             else:
                 return
 
@@ -744,7 +761,9 @@ class Consumer(KafkaConsumer):
 
             # Save thread timestamp if this is the first message
             if thread_ts is None:
-                grb_alert_db.set_thread_ts(response["ts"], self.gcn_stream.session_local)
+                grb_alert_db.set_thread_ts(
+                    response["ts"], self.gcn_stream.session_local
+                )
                 self.logger.info(
                     f"Thread timestamp set for GRB alert {grb_alert.trigger_id}: {response['ts']}"
                 )
