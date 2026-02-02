@@ -8,7 +8,7 @@ secret = "tata"
 "enable.auto.commit" = false
 
 [GCN_TOPICS]
-topics = ['igwn.gwalert', 
+topics = ['igwn.gwalert',
             'gcn.classic.voevent.SWIFT_BAT_GRB_POS_ACK',
             'gcn.classic.voevent.SWIFT_BAT_QL_POS',
             'gcn.classic.voevent.SWIFT_UVOT_POS',
