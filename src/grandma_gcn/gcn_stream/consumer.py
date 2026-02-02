@@ -147,10 +147,12 @@ class Consumer(KafkaConsumer):
             Any exception during processing is logged and re-raised.
         """
         topic_lower = topic.lower()
-        is_grb = "swift" in topic_lower or "svom" in topic_lower
 
-        if is_grb:
-            self._process_grb_alert(notice)
+        # Determine mission from topic
+        if "swift" in topic_lower:
+            self._process_grb_alert(notice, Mission.SWIFT)
+        elif "svom" in topic_lower:
+            self._process_grb_alert(notice, Mission.SVOM)
         else:
             self._process_gw_alert(notice)
 
@@ -377,14 +379,94 @@ class Consumer(KafkaConsumer):
             logger=self.logger,
         )
 
+    def _get_pending_swift_alerts(
+        self, all_alerts: list, initial_alert_id: int
+    ) -> list:
+        """Get pending Swift alerts excluding first BAT and XRT."""
+        first_bat_id = None
+        first_xrt_id = None
+        for alert in all_alerts:
+            if alert.packet_type == 61 and first_bat_id is None:
+                first_bat_id = alert.id_grb
+            if alert.packet_type == 67 and first_xrt_id is None:
+                first_xrt_id = alert.id_grb
+
+        return [
+            alert
+            for alert in all_alerts
+            if alert.id_grb < initial_alert_id
+            and alert.id_grb not in (first_bat_id, first_xrt_id)
+        ]
+
+    def _get_pending_svom_alerts(
+        self, all_alerts: list, initial_alert_id: int
+    ) -> list:
+        """Get pending SVOM alerts excluding first packet 202."""
+        first_initial_id = None
+        for alert in all_alerts:
+            if alert.packet_type == 202:
+                first_initial_id = alert.id_grb
+                break
+
+        return [
+            alert
+            for alert in all_alerts
+            if alert.id_grb < initial_alert_id and alert.id_grb != first_initial_id
+        ]
+
+    def _send_pending_swift_update(
+        self, trigger_id: str, alert_db, grb_alert: GRB_alert, thread_ts: str
+    ) -> None:
+        """Send a pending Swift update to the thread."""
+        bat_alert = self._fetch_alert_from_db(trigger_id, 61)
+        xrt_alert = self._fetch_alert_from_db(trigger_id, 67)
+        uvot_alert = (
+            self._fetch_alert_from_db(trigger_id, 81)
+            if alert_db.packet_type == 81
+            else None
+        )
+
+        send_grb_alert_to_slack(
+            grb_alert=grb_alert,
+            message_builder=build_swift_alert_msg,
+            slack_client=self.gcn_stream.slack_client,
+            channel=self.grb_alert_channel,
+            logger=self.logger,
+            thread_ts=thread_ts,
+            bat_alert=bat_alert,
+            xrt_alert=xrt_alert,
+            uvot_alert=uvot_alert,
+            is_xrt_update=alert_db.packet_type == 67,
+            is_uvot_update=alert_db.packet_type == 81,
+        )
+
+    def _send_pending_svom_update(
+        self, trigger_id: str, alert_db, grb_alert: GRB_alert, thread_ts: str
+    ) -> None:
+        """Send a pending SVOM update to the thread."""
+        mxt_alert = (
+            self._fetch_alert_from_db(trigger_id, 209)
+            if alert_db.packet_type == 209
+            else None
+        )
+
+        send_grb_alert_to_slack(
+            grb_alert=grb_alert,
+            message_builder=build_svom_alert_msg,
+            slack_client=self.gcn_stream.slack_client,
+            channel=self.grb_alert_channel,
+            logger=self.logger,
+            thread_ts=thread_ts,
+            is_thread_update=True,
+            mxt_alert=mxt_alert,
+            is_mxt_update=alert_db.packet_type == 209,
+        )
+
     def _send_pending_updates_to_thread(
         self, trigger_id: str, mission: Mission, thread_ts: str, initial_alert_id: int
     ) -> None:
         """
         Send any updates that arrived before the thread was created, in chronological order.
-
-        This method retrieves ALL alerts for this trigger_id, filters out the ones that were
-        included in the initial message, and sends the rest in arrival order.
 
         Parameters
         ----------
@@ -397,51 +479,18 @@ class Consumer(KafkaConsumer):
         initial_alert_id : int
             The database ID of the alert that triggered the initial message
         """
-        # Get ALL alerts for this trigger_id, ordered by arrival time
         all_alerts = GRB_alert_DB.get_all_by_trigger_id(
             self.gcn_stream.session_local, trigger_id
         )
 
-        # Filter alerts that:
-        # 1. Arrived BEFORE the initial message (id_grb < initial_alert_id)
-        # 2. Are NOT the ones included in the initial message (handled below per mission)
-        pending_alerts = []
-
+        # Get pending alerts based on mission
         if mission == Mission.SWIFT:
-            # For Swift: initial message includes BAT (61) and FIRST XRT (67)
-            # Get the first BAT and first XRT IDs
-            first_bat_id = None
-            first_xrt_id = None
-            for alert in all_alerts:
-                if alert.packet_type == 61 and first_bat_id is None:
-                    first_bat_id = alert.id_grb
-                if alert.packet_type == 67 and first_xrt_id is None:
-                    first_xrt_id = alert.id_grb
-
-            # Collect pending alerts (exclude first BAT and first XRT, only those before initial message)
-            for alert in all_alerts:
-                if alert.id_grb < initial_alert_id:
-                    # Skip first BAT and first XRT (already in initial message)
-                    if alert.id_grb != first_bat_id and alert.id_grb != first_xrt_id:
-                        pending_alerts.append(alert)
-
+            pending_alerts = self._get_pending_swift_alerts(all_alerts, initial_alert_id)
         elif mission == Mission.SVOM:
-            # For SVOM: initial message includes first packet 202
-            # Get the first packet 202 ID
-            first_initial_id = None
-            for alert in all_alerts:
-                if alert.packet_type == 202 and first_initial_id is None:
-                    first_initial_id = alert.id_grb
-                    break
+            pending_alerts = self._get_pending_svom_alerts(all_alerts, initial_alert_id)
+        else:
+            pending_alerts = []
 
-            # Collect pending alerts (exclude first packet 202, only those before initial message)
-            for alert in all_alerts:
-                if alert.id_grb < initial_alert_id:
-                    # Skip first packet 202 (already in initial message)
-                    if alert.id_grb != first_initial_id:
-                        pending_alerts.append(alert)
-
-        # Send all pending alerts in chronological order
         for alert_db in pending_alerts:
             grb_alert = GRB_alert.from_db_model(alert_db)
             self.logger.info(
@@ -449,52 +498,9 @@ class Consumer(KafkaConsumer):
             )
 
             if mission == Mission.SWIFT:
-                bat_alert = self._fetch_alert_from_db(trigger_id, 61)
-                xrt_alert = self._fetch_alert_from_db(trigger_id, 67)
-                uvot_alert = (
-                    self._fetch_alert_from_db(trigger_id, 81)
-                    if alert_db.packet_type == 81
-                    else None
-                )
-
-                is_xrt_update = alert_db.packet_type == 67
-                is_uvot_update = alert_db.packet_type == 81
-
-                send_grb_alert_to_slack(
-                    grb_alert=grb_alert,
-                    message_builder=build_swift_alert_msg,
-                    slack_client=self.gcn_stream.slack_client,
-                    channel=self.grb_alert_channel,
-                    logger=self.logger,
-                    thread_ts=thread_ts,
-                    bat_alert=bat_alert,
-                    xrt_alert=xrt_alert,
-                    uvot_alert=uvot_alert,
-                    is_xrt_update=is_xrt_update,
-                    is_uvot_update=is_uvot_update,
-                )
-
+                self._send_pending_swift_update(trigger_id, alert_db, grb_alert, thread_ts)
             elif mission == Mission.SVOM:
-                # For SVOM updates
-                mxt_alert = (
-                    self._fetch_alert_from_db(trigger_id, 209)
-                    if alert_db.packet_type == 209
-                    else None
-                )
-                is_thread_update = True
-                is_mxt_update = alert_db.packet_type == 209
-
-                send_grb_alert_to_slack(
-                    grb_alert=grb_alert,
-                    message_builder=build_svom_alert_msg,
-                    slack_client=self.gcn_stream.slack_client,
-                    channel=self.grb_alert_channel,
-                    logger=self.logger,
-                    thread_ts=thread_ts,
-                    is_thread_update=is_thread_update,
-                    mxt_alert=mxt_alert,
-                    is_mxt_update=is_mxt_update,
-                )
+                self._send_pending_svom_update(trigger_id, alert_db, grb_alert, thread_ts)
 
     def _should_send_position_update(
         self, trigger_id: str, packet_type: int, update_name: str
@@ -595,28 +601,101 @@ class Consumer(KafkaConsumer):
                 f"Failed to schedule SWIFT HTML analysis for trigger {trigger_id}: {e}"
             )
 
-    def _process_grb_alert(self, notice: bytes) -> None:
+    def _get_existing_thread(self, trigger_id: str) -> GRB_alert_DB | None:
+        """Get existing thread for a trigger_id if it exists."""
+        return (
+            self.gcn_stream.session_local.query(GRB_alert_DB)
+            .filter_by(triggerId=trigger_id)
+            .filter(GRB_alert_DB.thread_ts.isnot(None))
+            .first()
+        )
+
+    def _should_send_swift_slack(self, grb_alert: GRB_alert) -> bool:
+        """Determine if Swift alert should trigger a Slack message."""
+        if grb_alert.packet_type == 61:  # BAT_GRB_POS_ACK
+            xrt_exists = GRB_alert_DB.get_by_trigger_id_and_packet_type(
+                self.gcn_stream.session_local, grb_alert.trigger_id, 67
+            )
+            if xrt_exists:
+                self.logger.info(
+                    f"BAT alert {grb_alert.trigger_id} arrived after XRT, sending combined message"
+                )
+                return True
+            self.logger.info(
+                f"Swift BAT alert {grb_alert.trigger_id} stored, waiting for XRT"
+            )
+            return False
+
+        if grb_alert.packet_type == 67:  # XRT_POSITION
+            bat_exists = GRB_alert_DB.get_by_trigger_id_and_packet_type(
+                self.gcn_stream.session_local, grb_alert.trigger_id, 61
+            )
+            if bat_exists:
+                self.logger.info(
+                    f"XRT alert {grb_alert.trigger_id} arrived after BAT, sending combined message"
+                )
+                return True
+            self.logger.info(
+                f"Swift XRT alert {grb_alert.trigger_id} stored, waiting for BAT"
+            )
+            return False
+
+        if grb_alert.packet_type == 81:  # UVOT_POSITION
+            return self._should_send_position_update(grb_alert.trigger_id, 81, "UVOT")
+
+        return True
+
+    def _should_send_svom_slack(self, grb_alert: GRB_alert) -> bool:
+        """Determine if SVOM alert should trigger a Slack message."""
+        update_types = {204: "Slew accepted", 205: "Slew rejected", 209: "MXT"}
+        if grb_alert.packet_type in update_types:
+            return self._should_send_position_update(
+                grb_alert.trigger_id, grb_alert.packet_type, update_types[grb_alert.packet_type]
+            )
+        return True
+
+    def _build_swift_slack_kwargs(self, grb_alert: GRB_alert) -> dict:
+        """Build kwargs for Swift Slack message."""
+        bat_alert = self._fetch_alert_from_db(grb_alert.trigger_id, 61)
+        xrt_alert_db = GRB_alert_DB.get_by_trigger_id_and_packet_type(
+            self.gcn_stream.session_local, grb_alert.trigger_id, 67, get_first=True
+        )
+        xrt_alert = GRB_alert.from_db_model(xrt_alert_db) if xrt_alert_db else None
+        uvot_alert = self._fetch_alert_from_db(grb_alert.trigger_id, 81)
+        existing_thread = self._get_existing_thread(grb_alert.trigger_id)
+
+        return {
+            "bat_alert": bat_alert,
+            "xrt_alert": xrt_alert,
+            "uvot_alert": uvot_alert,
+            "is_xrt_update": grb_alert.packet_type == 67 and existing_thread is not None,
+            "is_uvot_update": grb_alert.packet_type == 81 and existing_thread is not None,
+        }
+
+    def _build_svom_slack_kwargs(self, grb_alert: GRB_alert) -> dict:
+        """Build kwargs for SVOM Slack message."""
+        mxt_alert = self._fetch_alert_from_db(grb_alert.trigger_id, 209)
+        existing_thread = self._get_existing_thread(grb_alert.trigger_id)
+
+        return {
+            "is_thread_update": existing_thread is not None,
+            "mxt_alert": mxt_alert,
+            "is_mxt_update": grb_alert.packet_type == 209 and existing_thread is not None,
+        }
+
+    def _process_grb_alert(self, notice: bytes, mission: Mission) -> None:
         """
         Process a GRB alert notice received from the Kafka stream.
-
-        This method performs the following steps:
-        1. Parses the GRB alert
-        2. Filters based on mission and packet type
-        3. Saves or updates the alert in the database
-        4. Sends a Slack notification
 
         Parameters
         ----------
         notice : bytes
             The alert notice in bytes, as received from the Kafka stream.
-
-        Raises
-        ------
-        Exception
-            Any exception during processing is logged and re-raised.
+        mission : Mission
+            The mission that detected this GRB (determined from Kafka topic).
         """
         try:
-            grb_alert = GRB_alert(notice)
+            grb_alert = GRB_alert(notice, mission)
 
             self.logger.info(f"Processing GRB alert: {grb_alert.trigger_id}")
             self.logger.info(
@@ -626,198 +705,60 @@ class Consumer(KafkaConsumer):
                 f"Error: {grb_alert.ra_dec_error_arcmin:.2f} arcmin"
             )
 
-            # Filter alerts based on mission and packet type
-            should_process = grb_alert.should_process_alert()
-            if not should_process:
+            if not grb_alert.should_process_alert():
                 self.logger.info(
-                    f"GRB alert {grb_alert.trigger_id} filtered out (mission: {grb_alert.mission.value}, packet_type: {grb_alert.packet_type})"
+                    f"GRB alert {grb_alert.trigger_id} filtered out "
+                    f"(mission: {grb_alert.mission.value}, packet_type: {grb_alert.packet_type})"
                 )
                 return
 
-            # Save or update in database
             grb_alert_db = self._push_grb_alert_to_db(grb_alert)
 
             # Determine if we should send a Slack message
-            # For Swift: only send message if we have BAT_GRB_POS_ACK (packet=61) and XRT_POSITION (packet_type 67)
-            # For SVOM: send message for all alerts
-            should_send_slack = True
-            bat_alert = None
-            xrt_alert = None
+            if mission == Mission.SWIFT:
+                should_send_slack = self._should_send_swift_slack(grb_alert)
+                message_builder = build_swift_alert_msg
+                kwargs = self._build_swift_slack_kwargs(grb_alert) if should_send_slack else {}
+            elif mission == Mission.SVOM:
+                should_send_slack = self._should_send_svom_slack(grb_alert)
+                message_builder = build_svom_alert_msg
+                kwargs = self._build_svom_slack_kwargs(grb_alert) if should_send_slack else {}
+            else:
+                return
 
-            if grb_alert.mission == Mission.SWIFT:
-                if grb_alert.packet_type == 61:  # BAT_GRB_POS_ACK
-                    # Check if XRT already exists
-                    xrt_alert_db = GRB_alert_DB.get_by_trigger_id_and_packet_type(
-                        self.gcn_stream.session_local, grb_alert.trigger_id, 67
-                    )
+            if not should_send_slack:
+                return
 
-                    if xrt_alert_db:
-                        # XRT exists, send combined message
-                        self.logger.info(
-                            f"BAT alert {grb_alert.trigger_id} arrived after XRT, sending combined message"
-                        )
-                        should_send_slack = True
-                    else:
-                        # XRT hasn't arrived yet, store BAT and wait
-                        self.logger.info(
-                            f"Swift BAT alert {grb_alert.trigger_id} stored, waiting for XRT"
-                        )
-                        should_send_slack = False
+            existing_thread = self._get_existing_thread(grb_alert.trigger_id)
+            thread_ts = existing_thread.thread_ts if existing_thread else None
 
-                elif grb_alert.packet_type == 67:  # XRT_POSITION
-                    # Check if BAT already exists
-                    bat_alert_db = GRB_alert_DB.get_by_trigger_id_and_packet_type(
-                        self.gcn_stream.session_local, grb_alert.trigger_id, 61
-                    )
+            response = send_grb_alert_to_slack(
+                grb_alert=grb_alert,
+                message_builder=message_builder,
+                slack_client=self.gcn_stream.slack_client,
+                channel=self.grb_alert_channel,
+                logger=self.logger,
+                thread_ts=thread_ts,
+                **kwargs,
+            )
 
-                    if bat_alert_db:
-                        # BAT exists, send combined message
-                        self.logger.info(
-                            f"XRT alert {grb_alert.trigger_id} arrived after BAT, sending combined message"
-                        )
-                        should_send_slack = True
-                    else:
-                        # BAT hasn't arrived yet, store XRT and wait
-                        self.logger.info(
-                            f"Swift XRT alert {grb_alert.trigger_id} stored, waiting for BAT"
-                        )
-                        should_send_slack = False
-
-                elif grb_alert.packet_type == 81:  # UVOT_POSITION
-                    should_send_slack = self._should_send_position_update(
-                        grb_alert.trigger_id, 81, "UVOT"
-                    )
-
-            elif grb_alert.mission == Mission.SVOM:
-                if grb_alert.packet_type == 204:  # SLEW_ACCEPTED
-                    should_send_slack = self._should_send_position_update(
-                        grb_alert.trigger_id, 204, "Slew accepted"
-                    )
-                elif grb_alert.packet_type == 205:  # SLEW_REJECTED
-                    should_send_slack = self._should_send_position_update(
-                        grb_alert.trigger_id, 205, "Slew rejected"
-                    )
-                elif grb_alert.packet_type == 209:  # MXT_POSITION
-                    should_send_slack = self._should_send_position_update(
-                        grb_alert.trigger_id, 209, "MXT"
-                    )
-
-            if should_send_slack:
-                if grb_alert.mission == Mission.SWIFT:
-                    # For Swift, always fetch BAT and FIRST XRT from DB for initial message
-                    if not bat_alert:
-                        bat_alert = self._fetch_alert_from_db(grb_alert.trigger_id, 61)
-                    if not xrt_alert:
-                        # Get the FIRST XRT (oldest) for the initial combined message
-                        xrt_alert_db = GRB_alert_DB.get_by_trigger_id_and_packet_type(
-                            self.gcn_stream.session_local,
-                            grb_alert.trigger_id,
-                            67,
-                            get_first=True,
-                        )
-                        xrt_alert = (
-                            GRB_alert.from_db_model(xrt_alert_db)
-                            if xrt_alert_db
-                            else None
-                        )
-
-                    # Fetch UVOT alert if available
-                    uvot_alert = self._fetch_alert_from_db(grb_alert.trigger_id, 81)
-
-                    # Check if we already have a thread (to detect position updates)
-                    existing_thread = (
-                        self.gcn_stream.session_local.query(GRB_alert_DB)
-                        .filter_by(triggerId=grb_alert.trigger_id)
-                        .filter(GRB_alert_DB.thread_ts.isnot(None))
-                        .first()
-                    )
-
-                    is_xrt_update = (
-                        grb_alert.packet_type == 67 and existing_thread is not None
-                    )
-                    is_uvot_update = (
-                        grb_alert.packet_type == 81 and existing_thread is not None
-                    )
-
-                    message_builder = build_swift_alert_msg
-                    kwargs = {
-                        "bat_alert": bat_alert,
-                        "xrt_alert": xrt_alert,
-                        "uvot_alert": uvot_alert,
-                        "is_xrt_update": is_xrt_update,
-                        "is_uvot_update": is_uvot_update,
-                    }
-                else:
-                    # For SVOM, use current alert
-                    message_builder = build_svom_alert_msg
-
-                    # Fetch MXT alert if available
-                    mxt_alert = self._fetch_alert_from_db(grb_alert.trigger_id, 209)
-
-                    # Check if we already have a thread for this trigger_id
-                    existing_thread = (
-                        self.gcn_stream.session_local.query(GRB_alert_DB)
-                        .filter_by(triggerId=grb_alert.trigger_id)
-                        .filter(GRB_alert_DB.thread_ts.isnot(None))
-                        .first()
-                    )
-
-                    # For SVOM slew updates (packets 204, 205), set is_thread_update flag
-                    # For MXT position (packet 209), set is_mxt_update flag
-                    is_thread_update = existing_thread is not None
-                    is_mxt_update = (
-                        grb_alert.packet_type == 209 and existing_thread is not None
-                    )
-
-                    kwargs = {
-                        "is_thread_update": is_thread_update,
-                        "mxt_alert": mxt_alert,
-                        "is_mxt_update": is_mxt_update,
-                    }
-
-                # For Swift, check if we already have a thread for this trigger_id
-                if grb_alert.mission == Mission.SWIFT:
-                    existing_thread = (
-                        self.gcn_stream.session_local.query(GRB_alert_DB)
-                        .filter_by(triggerId=grb_alert.trigger_id)
-                        .filter(GRB_alert_DB.thread_ts.isnot(None))
-                        .first()
-                    )
-
-                thread_ts = existing_thread.thread_ts if existing_thread else None
-
-                response = send_grb_alert_to_slack(
-                    grb_alert=grb_alert,
-                    message_builder=message_builder,
-                    slack_client=self.gcn_stream.slack_client,
-                    channel=self.grb_alert_channel,
-                    logger=self.logger,
-                    thread_ts=thread_ts,
-                    **kwargs,
+            # Save thread timestamp if this is the first message
+            if thread_ts is None:
+                grb_alert_db.set_thread_ts(response["ts"], self.gcn_stream.session_local)
+                self.logger.info(
+                    f"Thread timestamp set for GRB alert {grb_alert.trigger_id}: {response['ts']}"
                 )
 
-                # Save thread timestamp if this is the first message
-                if thread_ts is None:
-                    grb_alert_db.set_thread_ts(
-                        response["ts"], self.gcn_stream.session_local
-                    )
-                    self.logger.info(
-                        f"Thread timestamp set for GRB alert {grb_alert.trigger_id}: {response['ts']}"
-                    )
+                self._send_pending_updates_to_thread(
+                    grb_alert.trigger_id, mission, response["ts"], grb_alert_db.id_grb
+                )
 
-                    self._send_pending_updates_to_thread(
-                        grb_alert.trigger_id,
-                        grb_alert.mission,
-                        response["ts"],
-                        grb_alert_db.id_grb,
+                if mission == Mission.SWIFT:
+                    self._schedule_swift_html_analysis(
+                        trigger_id=grb_alert.trigger_id,
+                        thread_ts=response["ts"],
+                        channel=self.grb_alert_channel,
                     )
-
-                    if grb_alert.mission == Mission.SWIFT:
-                        self._schedule_swift_html_analysis(
-                            trigger_id=grb_alert.trigger_id,
-                            thread_ts=response["ts"],
-                            channel=self.grb_alert_channel,
-                        )
 
         except Exception as err:
             self.logger.error(f"Error processing GRB alert: {err}")

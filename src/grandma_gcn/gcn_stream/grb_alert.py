@@ -23,7 +23,7 @@ class GRB_alert:
     Parses VOEvent XML alerts from GCN Kafka streams and extracts relevant information.
     """
 
-    def __init__(self, notice: bytes) -> None:
+    def __init__(self, notice: bytes, mission: Mission) -> None:
         """
         Initialize a GRB alert from a bytes notice in VOEvent XML format.
 
@@ -31,9 +31,12 @@ class GRB_alert:
         ----------
         notice : bytes
             The GCN notice in VOEvent XML bytes format
+        mission : Mission
+            The mission that detected this GRB (Swift or SVOM)
         """
         # Parse VOEvent XML
         self.voevent = vp.loads(notice)
+        self._mission = mission
         self.logger = logging.getLogger(f"gcn_stream.grb_alert_{self.trigger_id}")
 
     @classmethod
@@ -51,11 +54,12 @@ class GRB_alert:
         GRB_alert
             An instance of GRB_alert initialized with the database model data.
         """
-        # Get XML from the xml_payload column
-        if db_model.xml_payload:
-            return cls(db_model.xml_payload.encode("utf-8"))
-        else:
+        if not db_model.xml_payload:
             raise ValueError(f"No XML payload found for GRB alert {db_model.triggerId}")
+
+        # Get mission from DB model
+        mission = Mission(db_model.mission) if db_model.mission else Mission.UNKNOWN
+        return cls(db_model.xml_payload.encode("utf-8"), mission)
 
     @property
     def trigger_id(self) -> str:
@@ -240,43 +244,14 @@ class GRB_alert:
     @property
     def mission(self) -> Mission:
         """
-        Identify the mission that detected this GRB based on VOEvent metadata.
+        Get the mission that detected this GRB.
 
         Returns
         -------
         Mission
-            The mission enum value
+            The mission enum value (Swift, SVOM, or UNKNOWN)
         """
-        try:
-            # Check ivorn
-            ivorn = self.voevent.attrib.get("ivorn", "").lower()
-            if "svom" in ivorn:
-                return Mission.SVOM
-            if "swift" in ivorn or "bat" in ivorn:
-                return Mission.SWIFT
-
-            # Check instrument parameter
-            top_params = vp.get_toplevel_params(self.voevent)
-            if "Instrument" in top_params:
-                instrument = top_params["Instrument"]["value"].lower()
-                if "eclairs" in instrument:
-                    return Mission.SVOM
-                if "bat" in instrument:
-                    return Mission.SWIFT
-
-            # Check author
-            if hasattr(self.voevent, "Who") and hasattr(
-                self.voevent.Who, "AuthorIVORN"
-            ):
-                author = str(self.voevent.Who.AuthorIVORN).lower()
-                if "svom" in author:
-                    return Mission.SVOM
-                if "swift" in author or "nasa" in author:
-                    return Mission.SWIFT
-
-            return Mission.UNKNOWN
-        except Exception:
-            return Mission.UNKNOWN
+        return self._mission
 
     @property
     def skyportal_link(self) -> str:
