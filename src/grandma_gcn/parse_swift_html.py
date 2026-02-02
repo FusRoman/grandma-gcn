@@ -10,7 +10,6 @@ Extracts key parameters from SWIFT GRB analysis pages:
 """
 
 import re
-from typing import Dict
 
 import requests
 from bs4 import BeautifulSoup
@@ -19,7 +18,7 @@ from fink_utils.slack_bot.msg_builder import Message
 from grandma_gcn.slackbot.element_extension import BaseSection, MarkdownText
 
 
-def parse_swift_grb_html(trigger_id: int) -> Dict[str, any]:
+def parse_swift_grb_html(trigger_id: int) -> dict[str, any]:
     """
     Parse SWIFT BAT GRB HTML page to extract key parameters.
 
@@ -91,7 +90,7 @@ def parse_swift_grb_html(trigger_id: int) -> Dict[str, any]:
     return result
 
 
-def format_swift_message(params: Dict[str, any], trigger_id: int = None) -> Message:
+def format_swift_message(params: dict[str, any], trigger_id: int = None) -> Message:
     """
     Format the parsed parameters into a Slack message with proper header.
 

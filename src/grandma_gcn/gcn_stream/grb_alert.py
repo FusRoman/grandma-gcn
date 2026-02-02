@@ -375,12 +375,19 @@ class GRB_alert:
             if "Detection_Info" in grouped_params:
                 det_info = grouped_params["Detection_Info"]
                 # If Trigger_Type is CRT, then SNR is rate_signif
-                if "Trigger_Type" in det_info and det_info["Trigger_Type"]["value"] == "CRT":
+                if (
+                    "Trigger_Type" in det_info
+                    and det_info["Trigger_Type"]["value"] == "CRT"
+                ):
                     if "SNR" in det_info:
                         value = float(det_info["SNR"]["value"])
                         unit = det_info["SNR"].get("unit", "")
                         formatted_value = f"{value:.1f}"
-                        return f"{formatted_value} {unit}".strip() if unit else formatted_value
+                        return (
+                            f"{formatted_value} {unit}".strip()
+                            if unit
+                            else formatted_value
+                        )
 
             return "NA"
         except Exception as e:
@@ -412,12 +419,19 @@ class GRB_alert:
             if "Detection_Info" in grouped_params:
                 det_info = grouped_params["Detection_Info"]
                 # If Trigger_Type is IMT, then SNR is image_signif
-                if "Trigger_Type" in det_info and det_info["Trigger_Type"]["value"] == "IMT":
+                if (
+                    "Trigger_Type" in det_info
+                    and det_info["Trigger_Type"]["value"] == "IMT"
+                ):
                     if "SNR" in det_info:
                         value = float(det_info["SNR"]["value"])
                         unit = det_info["SNR"].get("unit", "")
                         formatted_value = f"{value:.1f}"
-                        return f"{formatted_value} {unit}".strip() if unit else formatted_value
+                        return (
+                            f"{formatted_value} {unit}".strip()
+                            if unit
+                            else formatted_value
+                        )
 
             return "NA"
         except Exception as e:

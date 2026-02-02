@@ -33,7 +33,7 @@ def fetch_and_post_swift_analysis(
     trigger_id: int,
     thread_ts: str,
     channel: str,
-    path_log: str = "/tmp",
+    path_log: str,
 ):
     """
     Fetch SWIFT BAT GRB HTML analysis and post results to Slack thread.
@@ -117,7 +117,7 @@ def fetch_and_post_swift_analysis(
 
 
 @celery.task(name="test_swift_html_parsing", bind=True)
-def test_swift_html_parsing(self, trigger_id: int, path_log: str = "/tmp"):
+def test_swift_html_parsing(self, trigger_id: int, path_log: str):
     """
     Test task for parsing SWIFT HTML without posting to Slack.
 
