@@ -1,0 +1,76 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<voe:VOEvent xmlns:voe="http://www.ivoa.net/xml/VOEvent/v2.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.ivoa.net/xml/VOEvent/v2.0 http://www.ivoa.net/xml/VOEvent/VOEvent-v2.0.xsd" role="observation" version="2.0" ivorn="ivo://org.svom/fsc#sb25120304_mxt-initial_qf4">
+  <Who>
+    <AuthorIVORN>ivo://org.svom/fsc</AuthorIVORN>
+    <Date>2025-12-03T18:22:44+00:00</Date>
+    <Author>
+      <title>{"full_name": "SVOM French Science Center", "ref": "https://fsc.svom.org/readthedocs"}</title>
+      <shortName>FSC</shortName>
+      <contactName>Timothe Roland</contactName>
+      <contactEmail>svom-contact@cea.fr</contactEmail>
+    </Author>
+  </Who>
+  <What>
+    <Param name="Packet_Type" value="209" ucd="meta.id"/>
+    <Param name="Pkt_Ser_Num" value="1" ucd="meta.id"/>
+    <Param name="Instrument" value="MXT" ucd="instr"/>
+    <Group name="Svom_Identifiers">
+      <Param name="Notice_Level" value="N2m" ucd="meta.id"/>
+      <Param name="Burst_Id" value="sb25120304" ucd="meta.id"/>
+    </Group>
+    <Group name="Detection_Info">
+      <Param name="SNR" value="255.00" unit="sigma" ucd="stat.snr"/>
+      <Param name="Mean_Flux" value="5.50" unit="erg.cm^-2.s^-1" ucd="phot.flux"/>
+      <Param name="Flux_Error" value="2.34" unit="erg.cm^-2.s^-1" ucd="phot.flux"/>
+    </Group>
+    <Group name="Target_Info">
+      <Param name="Within_ECLAIRs_R90" value="False" ucd="instr.param"/>
+      <Param name="ECLAIRs_Angle" value="5.22" unit="arcmin" ucd="pos.angDistance"/>
+      <Param name="Galactic_Lon" value="134.88" unit="deg" ucd="pos.galactic.lon"/>
+      <Param name="Galactic_Lat" value="-62.35" unit="deg" ucd="pos.galactic.lat"/>
+      <Param name="Moon_Angle" value="39.06" unit="deg" ucd="pos.angDistance"/>
+      <Param name="Sun_Angle" value="125.15" unit="deg" ucd="pos.angDistance"/>
+    </Group>
+    <Group name="Satellite_Info">
+      <Param name="Use_VT_Attitude" value="True" ucd="instr.param"/>
+      <Param name="Attitude_Ra" value="31.38" unit="deg" ucd="instr.param"/>
+      <Param name="Attitude_Dec" value="-4.71" unit="deg" ucd="instr.param"/>
+      <Param name="Attitude_Roll" value="127.10" unit="deg" ucd="instr.param"/>
+      <Param name="Sat_Longitude" value="-5.26" unit="deg" ucd="pos.earth.lon"/>
+      <Param name="Sat_Latitude" value="27.68" unit="deg" ucd="pos.earth.lat"/>
+      <Param name="Sat_Altitude" value="621.49" unit="km" ucd="pos.earth.altitude"/>
+    </Group>
+  </What>
+  <WhereWhen>
+    <ObsDataLocation>
+      <ObservatoryLocation id="GEOLEO"/>
+      <ObservationLocation>
+        <AstroCoordSystem id="UTC-ICRS-GEO"/>
+        <AstroCoords coord_system_id="UTC-ICRS-GEO">
+          <Time unit="s">
+            <TimeInstant>
+              <ISOTime>2025-12-03T18:18:55.947000</ISOTime>
+            </TimeInstant>
+          </Time>
+          <Position2D unit="deg">
+            <Name1>RA</Name1>
+            <Name2>Dec</Name2>
+            <Value2>
+              <C1>18.3731</C1>
+              <C2>0.0087</C2>
+            </Value2>
+            <Error2Radius>0.0106</Error2Radius>
+          </Position2D>
+        </AstroCoords>
+      </ObservationLocation>
+    </ObsDataLocation>
+  </WhereWhen>
+  <How>
+    <Description>N2m notice, data from MXT</Description>
+    <Reference uri="https://www.svom.eu/en/mxt-microchannel-x-ray-telescope-en/"/>
+  </How>
+  <Citations>
+    <EventIVORN cite="followup">ivo://org.svom/fsc#sb25120304_slewing</EventIVORN>
+    <EventIVORN cite="followup">ivo://org.svom/fsc#sb25120304_eclairs-wakeup</EventIVORN>
+  </Citations>
+</voe:VOEvent>

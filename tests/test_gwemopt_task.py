@@ -359,7 +359,7 @@ def test_process_alert_calls(
                                     gcn_stream=mock_gcn_stream,
                                     logger=logging.getLogger(),
                                 )
-                                consumer.process_alert(notice)
+                                consumer.process_alert(notice, topic="igwn.gwalert")
 
                                 # Check that the mkdir calls were made correctly
                                 mkdir_args = [

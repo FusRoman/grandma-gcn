@@ -1,0 +1,32 @@
+# Python build artifacts
+.pdm-build/
+dist/
+build/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Tests and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Docker
+.dockerignore

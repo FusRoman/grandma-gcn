@@ -139,6 +139,13 @@ def test_e2e_grandma_light(mocker, logger, tiles: dict[str, Table]):
     )
 
     push_message_for_test(
+        mocker,
+        message_queue,
+        "gcn.classic.voevent.SWIFT_BAT_QL_POS",
+        "swift_bat_type61.xml",
+    )
+
+    push_message_for_test(
         mocker, message_queue, "igwn.gwalert", "gw_notice_significant.json"
     )
 
@@ -147,7 +154,25 @@ def test_e2e_grandma_light(mocker, logger, tiles: dict[str, Table]):
     )
 
     push_message_for_test(
+        mocker, message_queue, "gcn.notices.svom.voevent.eclairs", "svom_eclairs.xml"
+    )
+
+    push_message_for_test(
+        mocker,
+        message_queue,
+        "gcn.classic.voevent.SWIFT_XRT_POSITION",
+        "swift_xrt_type67.xml",
+    )
+
+    push_message_for_test(
         mocker, message_queue, "igwn.gwalert", "S250207bg-preliminary.json"
+    )
+
+    push_message_for_test(
+        mocker,
+        message_queue,
+        "gcn.classic.voevent.SWIFT_UVOT_POS",
+        "swift_uvot_type81.xml",
     )
 
     push_message_for_test(
@@ -156,6 +181,13 @@ def test_e2e_grandma_light(mocker, logger, tiles: dict[str, Table]):
 
     push_message_for_test(
         mocker, message_queue, "igwn.gwalert", "gw_notice_unsignificant.json"
+    )
+
+    push_message_for_test(
+        mocker,
+        message_queue,
+        "gcn.notices.svom.voevent.mxt",
+        "svom_mxt.xml",
     )
 
     push_message_for_test(
