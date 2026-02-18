@@ -111,13 +111,15 @@ def build_svom_alert_msg(grb_alert: GRB_alert, **kwargs) -> Message:
         return msg
 
     # For initial alert (packet 202) or first message
+    skyportal_link = kwargs.get("skyportal_link", "")
     message_text = (
         f"• *Trigger Time:* {grb_alert.trigger_time_formatted}\n"
         f"• *Rate_Signif:* {grb_alert.rate_signif} / *Image_Signif:* {grb_alert.image_signif} / *Trigger_Dur:* {grb_alert.trigger_dur}\n"
         f"• *Position:* RA {grb_alert.ra:.2f}, DEC {grb_alert.dec:.2f}\n"
-        f"• *Uncertainty:* {grb_alert.ra_dec_error_arcmin:.2f} arcmin\n"
-        f":grb: <{grb_alert.skyportal_link}|SkyPortal Link>"
+        f"• *Uncertainty:* {grb_alert.ra_dec_error_arcmin:.2f} arcmin"
     )
+    if skyportal_link:
+        message_text += f"\n:grb: <{skyportal_link}|SkyPortal Link>"
 
     msg.add_header(f"🔔 New SVOM GRB {grb_alert.grb_name} / {grb_alert.trigger_id}")
     msg.add_divider()
@@ -200,7 +202,9 @@ def build_swift_alert_msg(grb_alert: GRB_alert, **kwargs) -> Message:
         )
         message_text_parts.append(xrt_position)
 
-    message_text_parts.append(f":grb: <{first.skyportal_link}|SkyPortal Link>")
+    skyportal_link = kwargs.get("skyportal_link", "")
+    if skyportal_link:
+        message_text_parts.append(f":grb: <{skyportal_link}|SkyPortal Link>")
     message_text = "\n".join(message_text_parts)
 
     msg.add_header(

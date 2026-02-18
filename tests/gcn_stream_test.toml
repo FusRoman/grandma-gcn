@@ -44,3 +44,7 @@ galaxy_catalog = "mangrove"
 username = "test_user"
 password = "test_password"
 base_url = "https://owncloud.example.com"
+
+[SKYPORTAL]
+base_url = "https://skyportal-icare.ijclab.in2p3.fr"
+token = "skyportal_token"
