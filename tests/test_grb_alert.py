@@ -1,5 +1,9 @@
 """Tests for the GRB_alert class."""
 
+from unittest.mock import MagicMock
+
+import pytest
+
 from grandma_gcn.gcn_stream.grb_alert import GRB_alert, Mission
 
 
@@ -131,3 +135,110 @@ class TestGRBAlertFromDbModel:
         assert recreated.packet_type == swift_bat_alert.packet_type
 
         session.close()
+
+    def test_from_db_model_no_xml_payload(self):
+        """Test that ValueError is raised when xml_payload is None."""
+        mock_db = MagicMock()
+        mock_db.xml_payload = None
+        mock_db.triggerId = "test123"
+
+        with pytest.raises(ValueError, match="No XML payload"):
+            GRB_alert.from_db_model(mock_db)
+
+
+class TestGetSkyportalLink:
+    """Tests for the get_skyportal_link method."""
+
+    def test_get_skyportal_link_sources_found(self, swift_bat_alert: GRB_alert, mocker):
+        """Test that the correct URL is returned when a source is found."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "data": {"sources": [{"id": "GCN-260204_1448"}]}
+        }
+        mocker.patch(
+            "grandma_gcn.gcn_stream.grb_alert.requests.get",
+            return_value=mock_response,
+        )
+
+        link = swift_bat_alert.get_skyportal_link("https://skyportal.io", "token")
+
+        assert link == "https://skyportal.io/source/GCN-260204_1448"
+
+    def test_get_skyportal_link_no_sources(self, swift_bat_alert: GRB_alert, mocker):
+        """Test fallback URL when the API returns an empty sources list."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"data": {"sources": []}}
+        mocker.patch(
+            "grandma_gcn.gcn_stream.grb_alert.requests.get",
+            return_value=mock_response,
+        )
+
+        link = swift_bat_alert.get_skyportal_link("https://skyportal.io", "token")
+
+        assert "skyportal.io" in link
+
+    def test_get_skyportal_link_request_exception(
+        self, swift_bat_alert: GRB_alert, mocker
+    ):
+        """Test fallback URL when the request raises an exception."""
+        mocker.patch(
+            "grandma_gcn.gcn_stream.grb_alert.requests.get",
+            side_effect=Exception("Connection error"),
+        )
+
+        link = swift_bat_alert.get_skyportal_link("https://skyportal.io", "token")
+
+        assert "skyportal.io" in link
+
+    def test_get_skyportal_link_no_search_id(self, swift_bat_alert: GRB_alert, mocker):
+        """Test fallback to trigger_id when event time is unavailable (empty search_id)."""
+        mocker.patch(
+            "grandma_gcn.gcn_stream.grb_alert.vp.get_event_time_as_utc",
+            return_value=None,
+        )
+
+        link = swift_bat_alert.get_skyportal_link("https://skyportal.io", "token")
+
+        assert "skyportal.io" in link
+        assert swift_bat_alert.trigger_id in link
+
+
+class TestShouldProcessAlertEdgeCases:
+    """Tests for edge cases in should_process_alert."""
+
+    def test_svom_none_packet_type(self, svom_eclairs_alert: GRB_alert, mocker):
+        """Test that SVOM alert with no packet type is rejected."""
+        mocker.patch(
+            "grandma_gcn.gcn_stream.grb_alert.vp.get_toplevel_params",
+            return_value={},
+        )
+        assert svom_eclairs_alert.should_process_alert() is False
+
+    def test_svom_rejected_packet_type(self, svom_eclairs_alert: GRB_alert, mocker):
+        """Test that SVOM alert with an unsupported packet type is rejected."""
+        mocker.patch(
+            "grandma_gcn.gcn_stream.grb_alert.vp.get_toplevel_params",
+            return_value={"Packet_Type": {"value": "203"}},
+        )
+        assert svom_eclairs_alert.should_process_alert() is False
+
+    def test_swift_none_packet_type(self, swift_bat_alert: GRB_alert, mocker):
+        """Test that Swift alert with no packet type is rejected."""
+        mocker.patch(
+            "grandma_gcn.gcn_stream.grb_alert.vp.get_toplevel_params",
+            return_value={},
+        )
+        assert swift_bat_alert.should_process_alert() is False
+
+    def test_swift_rejected_packet_type(self, swift_bat_alert: GRB_alert, mocker):
+        """Test that Swift alert with an unsupported packet type is rejected."""
+        mocker.patch(
+            "grandma_gcn.gcn_stream.grb_alert.vp.get_toplevel_params",
+            return_value={"Packet_Type": {"value": "60"}},
+        )
+        assert swift_bat_alert.should_process_alert() is False
+
+    def test_unknown_mission_accepted(self, swift_bat_alert: GRB_alert):
+        """Test that alerts with unknown mission are accepted by default."""
+        swift_bat_alert._mission = Mission.UNKNOWN
+        assert swift_bat_alert.should_process_alert() is True
