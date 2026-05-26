@@ -4,6 +4,7 @@ from typing import Self
 
 import requests
 import voeventparse as vp
+from astropy.time import Time
 
 from grandma_gcn.database.grb_db import GRB_alert as DBGRBAlert
 
@@ -188,6 +189,24 @@ class GRB_alert:
         """
         try:
             return vp.get_event_time_as_utc(self.voevent)
+        except Exception:
+            return None
+
+    @property
+    def trigger_time_mjd(self) -> float | None:
+        """
+        Get trigger time as Modified Julian Date.
+
+        Returns
+        -------
+        float | None
+            Trigger time in MJD, or None if unavailable
+        """
+        try:
+            event_time = vp.get_event_time_as_utc(self.voevent)
+            if event_time:
+                return Time(event_time).mjd
+            return None
         except Exception:
             return None
 

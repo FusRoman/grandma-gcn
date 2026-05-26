@@ -45,13 +45,13 @@ def _build_position_update_message(
 
     # Build message text
     if uncertainty:
-        message_text = (
-            f"• *{position_type}:* RA {ra}, DEC {dec} (UNC: {uncertainty} arcmin)"
-        )
+        message_text = f"• *{position_type}:* RA {ra} (deg), DEC {dec} (deg) (UNC: {uncertainty} arcmin)"
     elif magnitude:
-        message_text = f"• *{position_type}*\n• *Position:* RA {ra}, DEC {dec}\n• *Magnitude:* {magnitude}"
+        message_text = f"• *{position_type}*\n• *Position:* RA {ra} (deg), DEC {dec} (deg)\n• *Magnitude:* {magnitude}"
     else:
-        message_text = f"• *{position_type}*\n• *Position:* RA {ra}, DEC {dec}"
+        message_text = (
+            f"• *{position_type}*\n• *Position:* RA {ra} (deg), DEC {dec} (deg)"
+        )
 
     msg.add_header(
         f"Update: {'Swift' if 'Swift' in position_type or 'XRT' in position_type or 'UVOT' in position_type else 'SVOM'} GRB {grb_name}"
@@ -113,9 +113,14 @@ def build_svom_alert_msg(grb_alert: GRB_alert, **kwargs) -> Message:
     # For initial alert (packet 202) or first message
     skyportal_link = kwargs.get("skyportal_link", "")
     message_text = (
-        f"• *Trigger Time:* {grb_alert.trigger_time_formatted}\n"
-        f"• *Rate_Signif:* {grb_alert.rate_signif} / *Image_Signif:* {grb_alert.image_signif} / *Trigger_Dur:* {grb_alert.trigger_dur}\n"
-        f"• *Position:* RA {grb_alert.ra:.2f}, DEC {grb_alert.dec:.2f}\n"
+        f"• *Trigger Time:* {grb_alert.trigger_time_formatted}"
+        + (
+            f" (MJD: {grb_alert.trigger_time_mjd:.5f})"
+            if grb_alert.trigger_time_mjd is not None
+            else ""
+        )
+        + f"\n• *Rate_Signif:* {grb_alert.rate_signif} / *Image_Signif:* {grb_alert.image_signif} / *Trigger_Dur:* {grb_alert.trigger_dur}\n"
+        f"• *Position:* RA {grb_alert.ra:.2f} (deg), DEC {grb_alert.dec:.2f} (deg)\n"
         f"• *Uncertainty:* {grb_alert.ra_dec_error_arcmin:.2f} arcmin"
     )
     if skyportal_link:
@@ -183,7 +188,12 @@ def build_swift_alert_msg(grb_alert: GRB_alert, **kwargs) -> Message:
             f"{xrt_alert.ra_dec_error_arcmin:.2f}",
         )
 
-    message_text_parts = [f"• *Trigger Time:* {first.trigger_time_formatted}"]
+    mjd_str = (
+        f" (MJD: {first.trigger_time_mjd:.5f})"
+        if first.trigger_time_mjd is not None
+        else ""
+    )
+    message_text_parts = [f"• *Trigger Time:* {first.trigger_time_formatted}{mjd_str}"]
 
     # Add trigger info (Rate_Signif, Image_Signif, Trigger_Dur) from BAT if available
     if bat_alert:
@@ -197,7 +207,7 @@ def build_swift_alert_msg(grb_alert: GRB_alert, **kwargs) -> Message:
     # Add XRT position only
     if xrt_alert:
         xrt_position = (
-            f"• *XRT Position:* RA {xrt_alert.ra:.2f}, DEC {xrt_alert.dec:.2f} "
+            f"• *XRT Position:* RA {xrt_alert.ra:.2f} (deg), DEC {xrt_alert.dec:.2f} (deg) "
             f"(UNC: {xrt_alert.ra_dec_error_arcmin:.2f} arcmin)"
         )
         message_text_parts.append(xrt_position)
