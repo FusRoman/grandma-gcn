@@ -2,6 +2,7 @@ import logging
 from enum import Enum
 from typing import Self
 
+import requests
 import voeventparse as vp
 
 from grandma_gcn.database.grb_db import GRB_alert as DBGRBAlert
@@ -254,16 +255,66 @@ class GRB_alert:
         return self._mission
 
     @property
-    def skyportal_link(self) -> str:
+    def source_search_id(self) -> str:
         """
-        Generate the SkyPortal link for this GRB.
+        Generate search ID used by SkyPortal (YYMMDD_HHMM format).
+
+        Seconds are not used because the VOEvent trigger time can differ by from SkyPortal's dateobs.
+
+        Returns
+        -------
+        str
+            Search ID (example: "260204_1448") or empty string
+        """
+        try:
+            event_time = vp.get_event_time_as_utc(self.voevent)
+            if event_time:
+                return event_time.strftime("%y%m%d_%H%M")
+            return ""
+        except Exception:
+            return ""
+
+    def get_skyportal_link(self, base_url: str, token: str) -> str:
+        """
+        Fetch the SkyPortal source link by querying the API.
+
+        SkyPortal source IDs are prefixed (e.g. "GCN-260204_144829", "GRB-260204_144829")
+        so we search by the date part and read the actual ID from the response.
+
+        Parameters
+        ----------
+        base_url : str
+            SkyPortal instance base URL
+        token : str
+            SkyPortal API token
 
         Returns
         -------
         str
             URL to the SkyPortal source page
         """
-        return f"https://skyportal-icare.ijclab.in2p3.fr/source/{self.trigger_id}"
+        search_id = self.source_search_id
+        if not search_id:
+            self.logger.warning("No trigger time available for SkyPortal search")
+            return f"{base_url}/source/{self.trigger_id}"
+
+        try:
+            response = requests.get(
+                f"{base_url}/api/sources",
+                headers={"Authorization": f"token {token}"},
+                params={"sourceID": search_id},
+                timeout=10,
+            )
+            response.raise_for_status()
+            data = response.json().get("data", {})
+            sources = data.get("sources", [])
+            if sources:
+                source_id = sources[0]["id"]
+                return f"{base_url}/source/{source_id}"
+        except Exception as e:
+            self.logger.warning(f"Error fetching SkyPortal source: {e}")
+
+        return f"{base_url}/source/{search_id}"
 
     @property
     def grb_name(self) -> str:

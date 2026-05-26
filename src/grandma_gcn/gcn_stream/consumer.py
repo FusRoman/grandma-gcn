@@ -47,6 +47,11 @@ class Consumer(KafkaConsumer):
             "grb_alert_channel", self.gw_alert_channel
         )
 
+        # SkyPortal config for resolving source links
+        skyportal_config = gcn_stream.gcn_config.get("SKYPORTAL", {})
+        self.skyportal_base_url = skyportal_config.get("base_url", "")
+        self.skyportal_token = skyportal_config.get("token", "")
+
         # Subscribe to topics and receive alerts
         if gcn_stream.restart_queue:
             self.subscribe(
@@ -745,6 +750,12 @@ class Consumer(KafkaConsumer):
 
             if not should_send_slack:
                 return
+
+            if self.skyportal_base_url:
+                skyportal_link = grb_alert.get_skyportal_link(
+                    self.skyportal_base_url, self.skyportal_token
+                )
+                kwargs["skyportal_link"] = skyportal_link
 
             existing_thread = self._get_existing_thread(grb_alert.trigger_id)
             thread_ts = existing_thread.thread_ts if existing_thread else None
